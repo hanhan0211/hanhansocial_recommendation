@@ -10,6 +10,7 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import connectDB from "./config/db.js";
+import { corsOrigins } from "./config/corsOrigins.js";
 import { initSocket } from "./socket/socket.js";
 
 import authRoutes from "./routes/authRoutes.js";
@@ -32,7 +33,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: corsOrigins,
     credentials: true,
   })
 );

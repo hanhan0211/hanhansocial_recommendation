@@ -352,6 +352,9 @@ JWT_SECRET=your_jwt_secret_key
 # Port server
 PORT=5000
 
+# Frontend origins allowed by CORS, comma-separated
+FRONTEND_URLS=http://localhost:5173,http://127.0.0.1:5173,https://hanhansocial-recommendation.pages.dev
+
 # Google OAuth 2.0 — Đăng nhập bằng Google
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
@@ -363,9 +366,15 @@ GEMINI_API_KEY=your_gemini_api_key
 ### Frontend (`frontend/.env`)
 
 ```env
+# REST API URL. Required in production builds on Cloudflare Pages.
+VITE_API_URL=http://localhost:5000/api
+
 # Socket.IO server URL
 VITE_SOCKET_URL=http://localhost:5000
 ```
+
+For Cloudflare Pages, set `VITE_API_URL` to your deployed backend URL ending in `/api`
+and set `VITE_SOCKET_URL` to the same backend URL without `/api`.
 
 ---
 

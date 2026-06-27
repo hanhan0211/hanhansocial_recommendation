@@ -1,7 +1,13 @@
 import axios from "axios";
 
+const apiBaseURL = import.meta.env.VITE_API_URL;
+
+if (import.meta.env.PROD && !apiBaseURL) {
+  throw new Error("Missing VITE_API_URL. Set it to your backend API URL, for example https://your-backend.example.com/api");
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: apiBaseURL || "/api",
 });
 
 // Gắn token vào mọi request

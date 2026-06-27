@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import Message from "../models/Message.js";
+import { corsOrigins } from "../config/corsOrigins.js";
 
 export let io = null;
 export const userSocketMap = {};
@@ -14,7 +15,7 @@ export const getReceiverSocketId = (receiverId) => {
 export const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+      origin: corsOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
