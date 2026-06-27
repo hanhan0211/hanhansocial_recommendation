@@ -1,0 +1,5 @@
+Error: invalid_grant
+    at Gaxios._request (D:\kltn_socialandrecommend\backend\node_modules\gaxios\build\cjs\src\gaxios.js:155:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.getTokenAsync (D:\kltn_socialandrecommend\backend\node_modules\google-auth-library\build\src\auth\oauth2client.js:205:21)
+    at async googleLogin (file:///D:/kltn_socialandrecommend/backend/src/controllers/authController.js:142:24)

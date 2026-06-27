@@ -1,0 +1,1441 @@
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  FiCompass,
+  FiArrowLeft,
+  FiLoader,
+  FiSearch,
+  FiFlag,
+  FiHeart,
+  FiMessageCircle,
+  FiSend,
+  FiBookmark,
+  FiX,
+  FiShield,
+  FiUserPlus,
+  FiUserCheck,
+  FiTrash2,
+  FiUser,
+  FiHash,
+  FiFileText,
+  FiClock,
+} from 'react-icons/fi';
+import api from '../api/axios';
+import ShareModal from '../components/ShareModal';
+import ImageCarousel from '../components/ImageCarousel';
+import PostDropdown from '../components/PostDropdown';
+import BookmarkButton from '../components/BookmarkButton';
+import CommentItem from '../components/CommentItem';
+import { renderContentWithHashtags } from '../components/PostCard';
+
+const ExplorePage = () => {
+  const { tag } = useParams();
+  const navigate = useNavigate();
+
+  const storedUser = localStorage.getItem('user');
+  const currentUser = storedUser ? JSON.parse(storedUser) : null;
+  const myName = currentUser?.username || 'Người dùng';
+  const myAvatar =
+    currentUser?.avatar && currentUser.avatar.trim() !== ''
+      ? currentUser.avatar
+      : `https://ui-avatars.com/api/?name=${encodeURIComponent(myName)}&background=fbcfe8&color=be185d`;
+
+  // General States
+  const [posts, setPosts] = useState([]);           // bài hashtag
+  const [loading, setLoading] = useState(true);     // loading ban đầu trang
+  const [error, setError] = useState('');
+  const [savedPostIds, setSavedPostIds] = useState(() => new Set());
+  const [sharePost, setSharePost] = useState(null);
+
+  // Search & History States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [searchResults, setSearchResults] = useState(null); // { users, posts, hashtags }
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Search Results Tab State
+  const [searchActiveTab, setSearchActiveTab] = useState('all'); // 'all' | 'users' | 'posts' | 'hashtags'
+
+  // Comments, Report & Edit States
+  const [openCommentPostId, setOpenCommentPostId] = useState(null);
+  const [postComments, setPostComments] = useState({});
+  const [commentText, setCommentText] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [expandedReplies, setExpandedReplies] = useState({});
+  const [reportingComment, setReportingComment] = useState(null);
+  const [commentReportReason, setCommentReportReason] = useState("");
+  const [submittingCommentReport, setSubmittingCommentReport] = useState(false);
+
+
+  // Explore feed states
+  const [explorePosts, setExplorePosts] = useState([]);
+  const [exploreHasMore, setExploreHasMore] = useState(true);
+  const [exploreLoading, setExploreLoading] = useState(false);
+  const exploreSeenIdsRef = useRef(new Set()); // Set ID đã xem
+  const exploreSentinelRef = useRef(null);     // Trigger infinite scroll
+  const exploreFetchingRef = useRef(false);    // Chống gọi đồng thời
+
+  // localStorage key cho explore seenIds
+  const exploreSeenKey = `explore_seenIds_${currentUser?._id || 'guest'}`;
+
+  const saveExploreSeenIds = (idsSet) => {
+    try {
+      const payload = { ids: Array.from(idsSet), expiry: Date.now() + 48 * 60 * 60 * 1000 };
+      localStorage.setItem(exploreSeenKey, JSON.stringify(payload));
+    } catch (e) { /* quota */ }
+  };
+
+  const loadExploreSeenIds = () => {
+    try {
+      const raw = localStorage.getItem(exploreSeenKey);
+      if (!raw) return new Set();
+      const { ids, expiry } = JSON.parse(raw);
+      if (Date.now() > expiry) { localStorage.removeItem(exploreSeenKey); return new Set(); }
+      return new Set(ids);
+    } catch (e) { return new Set(); }
+  };
+
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportPostId, setReportPostId] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editPostId, setEditPostId] = useState(null);
+  const [editContent, setEditContent] = useState('');
+
+  const getSafeAvatar = (userObj) => {
+    if (userObj?.avatar && userObj.avatar.trim() !== '') return userObj.avatar;
+    const name = userObj?.username || 'User';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=fbcfe8&color=be185d`;
+  };
+
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return new Date(dateString).toLocaleDateString('vi-VN', options);
+  };
+
+  // 1. Tải lịch sử tìm kiếm
+  const fetchSearchHistory = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await api.get('search/history', { headers: { Authorization: `Bearer ${token}` } });
+      setSearchHistory(res.data || []);
+    } catch (err) { console.error('Lỗi khi tải lịch sử tìm kiếm:', err); }
+  };
+
+  // 2. Lấy bài viết explore (kèm seenIds)
+  const fetchExplorePosts = useCallback(async (isInitial = false) => {
+    if (exploreFetchingRef.current) return;
+    exploreFetchingRef.current = true;
+    if (isInitial) setExploreLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const seenParam = Array.from(exploreSeenIdsRef.current).join(',');
+      const url = seenParam
+        ? `posts/explore?limit=10&seenIds=${seenParam}`
+        : `posts/explore?limit=10`;
+
+      const res = await api.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      const newPosts = res.data.posts || [];
+
+      // Cập nhật seenIds
+      if (res.data.resetSeenIds) {
+        exploreSeenIdsRef.current = new Set(newPosts.map(p => p._id));
+      } else {
+        newPosts.forEach(p => exploreSeenIdsRef.current.add(p._id));
+      }
+      saveExploreSeenIds(exploreSeenIdsRef.current);
+
+      setExplorePosts(prev => {
+        const postsWithKeys = newPosts.map(p => ({
+          ...p,
+          uniqueKey: `${p._id}-${Math.random().toString(36).substring(2, 9)}`
+        }));
+        if (isInitial) return postsWithKeys;
+        return [...prev, ...postsWithKeys];
+      });
+      setExploreHasMore(res.data.hasMore ?? false);
+    } catch (err) {
+      console.error('Lỗi khi tải bài viết khám phá:', err);
+    } finally {
+      exploreFetchingRef.current = false;
+      if (isInitial) setExploreLoading(false);
+    }
+  }, []);
+
+  // 3. Lấy bài viết theo hashtag
+  const fetchHashtagPosts = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const res = await api.get(`posts/hashtag/${encodeURIComponent(tag)}`);
+      setPosts(res.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể tải bài viết cho hashtag này. Vui lòng thử lại.');
+    } finally { setLoading(false); }
+  };
+
+  const fetchSaved = async () => {
+    if (!currentUser?.username) return;
+    try {
+      const res = await api.get(`users/${currentUser.username}/saved-posts`);
+      const ids = new Set(
+        (res.data.savedPosts || res.data.posts || []).map((item) => (item._id || item).toString())
+      );
+      setSavedPostIds(ids);
+    } catch { /* optional */ }
+  };
+
+  // Mount: khởi tạo trang
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/login'); return; }
+
+    if (tag) {
+      fetchHashtagPosts();
+      fetchSaved();
+      setSearchResults(null);
+      setSearchQuery('');
+    } else {
+      // Load explore feed ngay khi vào trang, khôi phục seenIds từ localStorage
+      exploreSeenIdsRef.current = loadExploreSeenIds();
+      fetchSearchHistory();
+      fetchSaved();
+      fetchExplorePosts(true);
+      setLoading(false); // Không có trending nữa
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tag, navigate]);
+
+  // Infinite scroll cho explore feed
+  useEffect(() => {
+    if (tag) return;
+    
+    const handleScroll = () => {
+      if (!exploreHasMore || exploreFetchingRef.current) return;
+      
+      const scrollPosition = window.innerHeight + window.scrollY;
+      const documentHeight = document.documentElement.offsetHeight;
+      
+      // Kích hoạt khi cuộn đến gần cuối (cách đáy 300px)
+      if (scrollPosition >= documentHeight - 300) {
+        fetchExplorePosts(false);
+      }
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [tag, exploreHasMore, fetchExplorePosts]);
+
+  // 4. Tìm kiếm trực tiếp (Live Search / Autocomplete) khi gõ
+  const performLiveSearch = async (trimmedQuery) => {
+    if (!trimmedQuery) return;
+    setSearchLoading(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const searchRes = await api.get(`search/all?q=${encodeURIComponent(trimmedQuery)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSearchResults(searchRes.data || { users: [], posts: [], hashtags: [] });
+      setSearchActiveTab('all');
+    } catch (err) {
+      console.error('Lỗi khi tìm kiếm trực tiếp:', err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Debounce tìm kiếm khi gõ
+  useEffect(() => {
+    // Không tìm kiếm nếu query rỗng
+    if (!searchQuery || !searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(() => {
+      performLiveSearch(searchQuery.trim());
+    }, 400); // Đợi 400ms sau khi dừng gõ
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  // Lưu từ khóa hiện tại vào lịch sử khi tương tác kết quả (Click kết quả hoặc Enter)
+  const saveActiveSearchToHistory = async (targetQuery = searchQuery) => {
+    const trimmed = targetQuery ? targetQuery.trim() : '';
+    if (!trimmed) return;
+    try {
+      const token = localStorage.getItem('token');
+      const historyRes = await api.post('search/history', { text: trimmed }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSearchHistory(historyRes.data || []);
+    } catch (err) {
+      console.error('Lỗi lưu lịch sử tìm kiếm:', err);
+    }
+  };
+
+  // Kích hoạt tìm kiếm thủ công (khi Enter hoặc chọn lịch sử)
+  const handleSearch = async (targetQuery = searchQuery) => {
+    if (!targetQuery || !targetQuery.trim()) {
+      alert('Vui lòng nhập từ khóa để tìm kiếm!');
+      return;
+    }
+
+    const trimmedQuery = targetQuery.trim();
+    setSearchQuery(trimmedQuery);
+    
+    // Tìm kiếm tức thì và lưu lịch sử
+    await performLiveSearch(trimmedQuery);
+    await saveActiveSearchToHistory(trimmedQuery);
+  };
+
+  // 5. Xóa nhanh từ khóa trong ô nhập liệu
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(null);
+  };
+
+  // 6. Xóa từng mục lịch sử tìm kiếm cụ thể
+  const handleDeleteHistoryItem = async (historyId, e) => {
+    e.stopPropagation(); // Không kích hoạt tìm kiếm khi nhấn nút xóa
+    try {
+      const token = localStorage.getItem('token');
+      const res = await api.delete(`search/history/${historyId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSearchHistory(res.data || []);
+    } catch (err) {
+      console.error('Lỗi khi xóa lịch sử tìm kiếm:', err);
+    }
+  };
+
+  // 7. Xóa toàn bộ lịch sử tìm kiếm
+  const handleClearAllHistory = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử tìm kiếm không?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await api.delete('search/history/all', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSearchHistory([]);
+    } catch (err) {
+      console.error('Lỗi khi xóa sạch lịch sử tìm kiếm:', err);
+    }
+  };
+
+  // 8. Đăng ký / Bỏ theo dõi người dùng trực tiếp trên Search Results
+  const handleFollowUserInSearch = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await api.put(`users/${userId}/follow`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      // Cập nhật lại followers array của user đó trong searchResults
+      setSearchResults((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          users: prev.users.map((user) => {
+            if (user._id === userId) {
+              const updatedFollowers = res.data.isFollowing
+                ? [...(user.followers || []), currentUser?._id]
+                : (user.followers || []).filter((id) => id.toString() !== currentUser?._id?.toString());
+              return { ...user, followers: updatedFollowers };
+            }
+            return user;
+          })
+        };
+      });
+    } catch (err) {
+      console.error('Lỗi khi follow/unfollow:', err);
+      alert(err.response?.data?.message || 'Không thể cập nhật trạng thái theo dõi.');
+    }
+  };
+
+  // Tương tác Bài viết
+  const handleLikePost = async (postId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await api.put(`posts/${postId}/like`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Cập nhật mảng bài viết của Hashtag feed
+      setPosts(prev => prev.map(post => post._id === postId ? { ...post, likes: response.data } : post));
+
+      // Cập nhật mảng bài viết của Explore (Dành cho bạn)
+      setExplorePosts(prev => prev.map(post => post._id === postId ? { ...post, likes: response.data } : post));
+
+      // Cập nhật mảng bài viết của Search results
+      setSearchResults(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          posts: prev.posts.map(post => post._id === postId ? { ...post, likes: response.data } : post)
+        };
+      });
+    } catch (error) { console.error('Lỗi thả tim', error); }
+  };
+
+  const isPostSaved = (postId) =>
+    savedPostIds.has(postId?.toString?.() ?? String(postId));
+
+  const handleToggleSavePost = async (postId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await api.put(
+        `users/save-post/${postId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const ids = new Set(res.data.savedPosts.map((id) => id.toString()));
+      setSavedPostIds(ids);
+    } catch (error) {
+      console.error('Lỗi lưu bài viết:', error);
+      alert(error.response?.data?.message || 'Không thể lưu bài viết');
+    }
+  };
+
+  const toggleCommentSection = async (postId) => {
+    setOpenCommentPostId(postId);
+    setReplyingTo(null);
+    setCommentText('');
+    if (!postComments[postId]) {
+      try {
+        const response = await api.get(`comments/${postId}`);
+        setPostComments(prev => ({ ...prev, [postId]: response.data }));
+      } catch (error) { console.error('Lỗi lấy bình luận', error); }
+    }
+  };
+
+  const handleSubmitComment = async (postId) => {
+    if (!commentText.trim()) return;
+    try {
+      const token = localStorage.getItem('token');
+      const payload = { postId, content: commentText, parentId: replyingTo ? replyingTo.parentId : null };
+      const response = await api.post('comments', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const newComment = response.data;
+      const currentComments = postComments[postId] || [];
+      setPostComments(prev => {
+        if (payload.parentId) {
+          setExpandedReplies(expPrev => ({ ...expPrev, [payload.parentId]: true }));
+          return { ...prev, [postId]: currentComments.map(c => c._id === payload.parentId ? { ...c, replies: [...(c.replies || []), newComment] } : c) };
+        } else {
+          return { ...prev, [postId]: [...currentComments, { ...newComment, replies: [] }] };
+        }
+      });
+      setCommentText('');
+      setReplyingTo(null); 
+    } catch (error) { console.error('Lỗi gửi bình luận', error); }
+  };
+
+  const handleOpenShare = (post) => {
+    setActiveMenuId(null);
+    setSharePost(post);
+  };
+
+  const handleCopyLink = (postId) => {
+    const link = `${window.location.origin}/posts/${postId}`;
+    navigator.clipboard.writeText(link)
+      .then(() => {
+        alert('Đã sao chép liên kết bài viết vào bộ nhớ tạm!');
+      })
+      .catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = link;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('Đã sao chép liên kết bài viết vào bộ nhớ tạm!');
+      });
+    setActiveMenuId(null);
+  };
+
+  const handleUnfollowUser = async (targetUserId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn bỏ theo dõi người này không?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await api.put(`users/${targetUserId}/follow`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('Đã thay đổi trạng thái theo dõi người dùng này!');
+      setActiveMenuId(null);
+    } catch (error) {
+      alert('Lỗi khi thay đổi trạng thái theo dõi: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleOpenReport = (postId) => {
+    setReportPostId(postId);
+    setReportReason('');
+    setIsReportModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason.trim()) {
+      alert('Vui lòng chọn hoặc nhập lý do báo cáo!');
+      return;
+    }
+    setSubmittingReport(true);
+    try {
+      const token = localStorage.getItem('token');
+      await api.post(`posts/${reportPostId}/report`, { reason: reportReason }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('Báo cáo vi phạm thành công! Cảm ơn đóng góp của bạn.');
+      setIsReportModalOpen(false);
+      setReportPostId(null);
+      setReportReason('');
+    } catch (error) {
+      alert('Lỗi gửi báo cáo: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
+  const handleOpenEdit = (post) => {
+    setEditPostId(post._id);
+    setEditContent(post.content || '');
+    setIsEditModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editContent.trim()) {
+      alert('Nội dung bài viết không được để trống!');
+      return;
+    }
+    
+    // Cập nhật hashtag posts
+    setPosts(prev => prev.map(p => p._id === editPostId ? { ...p, content: editContent } : p));
+
+    // Cập nhật explore posts
+    setExplorePosts(prev => prev.map(p => p._id === editPostId ? { ...p, content: editContent } : p));
+
+    // Cập nhật search posts
+    setSearchResults(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        posts: prev.posts.map(p => p._id === editPostId ? { ...p, content: editContent } : p)
+      };
+    });
+
+    alert('Cập nhật bài viết thành công!');
+    setIsEditModalOpen(false);
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bình luận này không?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await api.delete(`comments/${commentId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('Đã xóa bình luận thành công!');
+      
+      setPostComments(prev => {
+        const updated = { ...prev };
+        for (const postId in updated) {
+          updated[postId] = updated[postId]
+            .filter(c => c._id !== commentId)
+            .map(c => ({
+              ...c,
+              replies: c.replies ? c.replies.filter(r => r._id !== commentId) : []
+            }));
+        }
+        return updated;
+      });
+    } catch (error) {
+      alert('Lỗi khi xóa bình luận: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleReportComment = async () => {
+    if (!commentReportReason.trim()) {
+      alert("Vui lòng chọn hoặc nhập lý do báo cáo!");
+      return;
+    }
+    setSubmittingCommentReport(true);
+    try {
+      const token = localStorage.getItem('token');
+      await api.post(`comments/${reportingComment._id}/report`, { reason: commentReportReason }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert("Báo cáo bình luận vi phạm thành công! Cảm ơn đóng góp của bạn.");
+      setReportingComment(null);
+      setCommentReportReason("");
+    } catch (error) {
+      alert("Lỗi gửi báo cáo bình luận: " + (error.response?.data?.message || error.message));
+    } finally {
+      setSubmittingCommentReport(false);
+    }
+  };
+
+
+  // activePost được tìm trong tất cả các nguồn bài viết
+  const activePost = posts.find((p) => p._id === openCommentPostId) ||
+                     explorePosts.find((p) => p._id === openCommentPostId) ||
+                     searchResults?.posts?.find((p) => p._id === openCommentPostId);
+
+  // Giao diện Thẻ Bài Viết chung — nhận thêm sourceList để ImageCarousel double-click like hoạt động đúng
+  const renderPostCard = (post, sourceList) => {
+    // Nếu không truyền sourceList, tự xác định dựa trên nơi post thuộc về
+    const postList = sourceList ||
+      (explorePosts.find(p => p._id === post._id) ? explorePosts :
+      searchResults?.posts?.find(p => p._id === post._id) ? searchResults.posts :
+      posts);
+
+    return (
+      <div key={post.uniqueKey || post._id} className="bg-white rounded-[32px] p-5 shadow-sm border border-slate-100 relative">
+        <div className="flex justify-between items-center mb-4 px-2 relative">
+          <div className="flex items-center gap-3">
+            <Link to={`/profile/${post.userId?.username}`} onClick={() => saveActiveSearchToHistory(searchQuery)}>
+              <img src={getSafeAvatar(post.userId)} className="w-12 h-12 rounded-2xl object-cover border border-slate-100 cursor-pointer animate-scale-up" alt="author" />
+            </Link>
+            <div>
+              <Link to={`/profile/${post.userId?.username}`} onClick={() => saveActiveSearchToHistory(searchQuery)}>
+                <h3 className="font-bold text-[16px] text-slate-900 flex items-center gap-1 hover:text-pink-600 transition cursor-pointer">
+                  {post.userId?.username || 'Người dùng ẩn danh'}
+                  {post.userId?.role === 'admin' && <span className="text-pink-500 text-[12px] bg-pink-50 p-1 rounded-full">✔</span>}
+                </h3>
+              </Link>
+              <p className="text-[13px] text-slate-500">{formatDate(post.createdAt)}</p>
+            </div>
+          </div>
+          
+          <PostDropdown
+            post={post}
+            currentUser={currentUser}
+            onDeletePost={(deletedPostId) => {
+              setPosts(prev => prev.filter(p => p._id !== deletedPostId));
+              setExplorePosts(prev => prev.filter(p => p._id !== deletedPostId));
+              setSearchResults(prev => {
+                if (!prev) return prev;
+                return { ...prev, posts: prev.posts.filter(p => p._id !== deletedPostId) };
+              });
+            }}
+            onOpenReport={handleOpenReport}
+            onOpenEdit={handleOpenEdit}
+            onOpenShare={handleOpenShare}
+            activeMenuId={activeMenuId}
+            setActiveMenuId={setActiveMenuId}
+            handleCopyLink={handleCopyLink}
+            handleUnfollowUser={handleUnfollowUser}
+          />
+        </div>
+        
+        <div className="px-2 mb-4">
+          <p className="text-[15px] text-slate-800 leading-relaxed whitespace-pre-wrap">
+            {renderContentWithHashtags(post.content)}
+          </p>
+        </div>
+        
+        <div className="mb-5 px-1">
+          <ImageCarousel 
+            images={post.images || (post.image ? [post.image] : [])} 
+            postId={post._id} 
+            handleLikePost={handleLikePost} 
+            posts={postList}
+            currentUser={currentUser} 
+          />
+        </div>
+
+        <div className="flex justify-between items-center bg-slate-50 p-2 rounded-2xl relative z-0">
+          <div className="flex gap-2">
+            {(() => {
+              const isLiked = post.likes?.includes(currentUser?._id);
+              return (
+                <button onClick={() => handleLikePost(post._id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition font-semibold text-[14px] cursor-pointer ${isLiked ? 'bg-pink-50 text-pink-600' : 'hover:bg-pink-50 text-slate-700 hover:text-pink-600'}`}>
+                  <FiHeart className={`text-[20px] ${isLiked ? 'fill-pink-500 text-pink-500' : ''}`} />
+                  <span className="hidden sm:inline">{post.likes?.length || 0} Thích</span>
+                </button>
+              );
+            })()}
+            <button onClick={() => toggleCommentSection(post._id)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-pink-50 text-slate-700 hover:text-pink-600 transition font-semibold text-[14px] cursor-pointer">
+              <FiMessageCircle size={20} /> <span className="hidden sm:inline">Bình luận</span>
+            </button>
+            <button onClick={() => handleOpenShare(post)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-slate-200 text-slate-700 transition font-semibold text-[14px] cursor-pointer">
+              <FiSend size={20} /> <span className="hidden sm:inline">Chia sẻ</span>
+            </button>
+          </div>
+          <BookmarkButton
+            isSaved={isPostSaved(post._id)}
+            onClick={() => handleToggleSavePost(post._id)}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F4F7FE] text-slate-900 font-sans pb-12">
+      <style>
+        {`
+          .hide-scroll::-webkit-scrollbar { display: none; }
+          .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+          .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+          @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+          @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+          .animate-scale-up { animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+          .hover-scale { transition: all 0.2s ease; }
+          .hover-scale:hover { transform: scale(1.02); }
+        `}
+      </style>
+
+      {/* Header Sticky */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-100/80 px-4 py-3 flex items-center gap-3 max-w-2xl mx-auto shadow-sm">
+        <button
+          type="button"
+          onClick={() => {
+            if (tag) {
+              navigate('/explore');
+            } else if (searchResults) {
+              handleClearSearch();
+            } else {
+              navigate('/home');
+            }
+          }}
+          className="p-2 rounded-full hover:bg-slate-100 cursor-pointer transition text-slate-700"
+          aria-label="Quay lại"
+        >
+          <FiArrowLeft size={22} />
+        </button>
+        <div className="p-1 text-pink-600 flex-shrink-0">
+          <FiCompass size={20} className="animate-spin-slow" />
+        </div>
+        <h1 className="font-bold text-slate-900 text-[17px]">
+          {tag ? `Khám phá các bài viết về #${tag}` : 'Khám phá'}
+        </h1>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        {/* ================= THANH TÌM KIẾM (Search Bar) - Hiển thị khi không xem chi tiết tag ================= */}
+        {!tag && (
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-4 border border-white shadow-sm flex flex-col gap-2 mb-6 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 via-purple-500 to-violet-600" />
+            <div className="relative flex items-center">
+              <FiSearch className="absolute left-4 text-slate-400 pointer-events-none" size={20} />
+              <input
+                type="text"
+                placeholder="Tìm kiếm mọi người, bài viết hoặc hashtag..."
+                className="w-full bg-slate-50 border border-slate-100 hover:border-pink-200 focus:border-pink-400 focus:bg-white rounded-2xl pl-12 pr-10 py-3 text-[14px] font-bold outline-none transition duration-300"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-4 p-1 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <FiX size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* LOADING & CONDITIONAL RENDERING BÊN TRONG EXPLOREPAGE */}
+        {loading ? (
+          <div className="min-h-[40vh] flex flex-col items-center justify-center">
+            <FiLoader className="animate-spin text-3xl text-pink-500 mb-2" />
+            <p className="text-slate-400 text-[13.5px]">Đang tải dữ liệu khám phá...</p>
+          </div>
+        ) : !tag ? (
+          /* ================= DASHBOARD KHÁM PHÁ (URL /explore) ================= */
+          searchLoading ? (
+            <div className="min-h-[40vh] flex flex-col items-center justify-center">
+              <FiLoader className="animate-spin text-3xl text-pink-500 mb-2" />
+              <p className="text-slate-400 text-[13.5px]">Đang tìm kiếm kết quả tốt nhất cho bạn...</p>
+            </div>
+          ) : searchResults ? (
+            /* ================= TRẠNG THÁI 2 - KẾT QUẢ TÌM KIẾM ================= */
+            <div className="space-y-6 animate-fade-in">
+              {/* Tabs list */}
+              <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-sm border border-slate-100/65 gap-1">
+                {[
+                  { id: 'all', label: 'Tất cả' },
+                  { id: 'users', label: 'Người dùng' },
+                  { id: 'posts', label: 'Bài viết' },
+                  { id: 'hashtags', label: 'Hashtag' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSearchActiveTab(tab.id)}
+                    className={`flex-1 py-2.5 text-[13.5px] font-bold rounded-xl transition-all cursor-pointer ${
+                      searchActiveTab === tab.id
+                        ? 'bg-pink-600 text-white shadow-md shadow-pink-500/20'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Content Display */}
+              {searchActiveTab === 'all' && (
+                <div className="space-y-8 animate-fade-in">
+                  {/* Empty state check */}
+                  {searchResults.users.length === 0 && searchResults.posts.length === 0 && searchResults.hashtags.length === 0 ? (
+                    <div className="bg-white rounded-[32px] p-12 text-center border border-slate-100 shadow-sm">
+                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                        <FiSearch className="text-slate-400" size={24} />
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-[16px]">Không tìm thấy kết quả</h3>
+                      <p className="text-slate-400 text-[13px] mt-1.5 leading-relaxed">
+                        Không tìm thấy kết quả nào phù hợp với từ khóa "{searchQuery}". <br/>Thử từ khóa khác xem sao!
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Top Users preview */}
+                      {searchResults.users.length > 0 && (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center px-1">
+                            <h3 className="font-black text-[15px] text-slate-800 flex items-center gap-1.5">
+                              <FiUser className="text-pink-500" /> Mọi người
+                            </h3>
+                            {searchResults.users.length > 3 && (
+                              <button
+                                onClick={() => setSearchActiveTab('users')}
+                                className="text-pink-600 hover:text-pink-700 font-bold text-[12.5px] cursor-pointer"
+                              >
+                                Xem tất cả ({searchResults.users.length})
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 gap-3">
+                            {searchResults.users.slice(0, 3).map(user => {
+                              const isFollowing = user.followers?.some(id => id.toString() === currentUser?._id?.toString());
+                              const isMe = user._id.toString() === currentUser?._id?.toString();
+                              return (
+                                <div key={user._id} className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-sm flex items-center justify-between hover-scale">
+                                  <Link to={`/profile/${user.username}`} onClick={() => saveActiveSearchToHistory(searchQuery)} className="flex items-center gap-3 min-w-0">
+                                    <img
+                                      src={getSafeAvatar(user)}
+                                      className="w-11 h-11 rounded-full object-cover border border-slate-100 flex-shrink-0"
+                                      alt={user.username}
+                                    />
+                                    <div className="min-w-0">
+                                      <h4 className="font-bold text-[14.5px] text-slate-900 truncate hover:text-pink-600 transition flex items-center gap-1">
+                                        {user.username}
+                                        {user.role === 'admin' && <span className="text-pink-500 text-[10px] bg-pink-50 px-1 py-0.5 rounded-full">✔</span>}
+                                      </h4>
+                                      <p className="text-[12px] text-slate-500 truncate">{user.fullname || `@${user.username}`}</p>
+                                    </div>
+                                  </Link>
+                                  {!isMe && (
+                                    <button
+                                      onClick={() => handleFollowUserInSearch(user._id)}
+                                      className={`px-3.5 py-1.5 rounded-xl text-[12.5px] font-bold transition cursor-pointer flex-shrink-0 ${
+                                        isFollowing
+                                          ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                          : 'bg-pink-50 text-pink-600 hover:bg-pink-600 hover:text-white'
+                                      }`}
+                                    >
+                                      {isFollowing ? 'Đang theo dõi' : 'Theo dõi'}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Top Hashtags preview */}
+                      {searchResults.hashtags.length > 0 && (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center px-1">
+                            <h3 className="font-black text-[15px] text-slate-800 flex items-center gap-1.5">
+                              <FiHash className="text-pink-500" /> Hashtag liên quan
+                            </h3>
+                            {searchResults.hashtags.length > 4 && (
+                              <button
+                                onClick={() => setSearchActiveTab('hashtags')}
+                                className="text-pink-600 hover:text-pink-700 font-bold text-[12.5px] cursor-pointer"
+                              >
+                                Xem tất cả ({searchResults.hashtags.length})
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {searchResults.hashtags.slice(0, 4).map((hashtag) => (
+                              <Link
+                                key={hashtag._id || hashtag.name}
+                                to={`/explore/${encodeURIComponent(hashtag.name)}`}
+                                onClick={() => saveActiveSearchToHistory(searchQuery)}
+                                className="group p-3 bg-slate-50 hover:bg-gradient-to-tr hover:from-pink-50 hover:to-violet-50 border border-slate-100 hover:border-pink-200 rounded-2xl flex items-center justify-between transition-all duration-300 shadow-sm"
+                              >
+                                <span className="font-bold text-[14px] text-slate-800 group-hover:text-pink-600 transition">
+                                  #{hashtag.name}
+                                </span>
+                                <span className="text-[11.5px] font-bold px-2 py-0.5 bg-white border border-slate-100 text-slate-500 rounded-full group-hover:border-pink-200 group-hover:text-pink-500 transition">
+                                  {hashtag.count || 0} bài đăng
+                                </span>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Top Posts preview */}
+                      {searchResults.posts.length > 0 && (
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center px-1">
+                            <h3 className="font-black text-[15px] text-slate-800 flex items-center gap-1.5">
+                              <FiFileText className="text-pink-500" /> Bài viết
+                            </h3>
+                            {searchResults.posts.length > 3 && (
+                              <button
+                                onClick={() => setSearchActiveTab('posts')}
+                                className="text-pink-600 hover:text-pink-700 font-bold text-[12.5px] cursor-pointer"
+                              >
+                                Xem tất cả ({searchResults.posts.length})
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-6">
+                            {searchResults.posts.slice(0, 3).map((post) => renderPostCard(post, searchResults.posts))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {searchActiveTab === 'users' && (
+                <div className="space-y-3 animate-fade-in">
+                  {searchResults.users.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 bg-white rounded-[32px] border border-slate-100">
+                      Không tìm thấy người dùng nào phù hợp cho "{searchQuery}".
+                    </div>
+                  ) : (
+                    searchResults.users.map(user => {
+                      const isFollowing = user.followers?.some(id => id.toString() === currentUser?._id?.toString());
+                      const isMe = user._id.toString() === currentUser?._id?.toString();
+                      return (
+                        <div key={user._id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between hover-scale">
+                          <Link to={`/profile/${user.username}`} onClick={() => saveActiveSearchToHistory(searchQuery)} className="flex items-center gap-3 min-w-0">
+                            <img
+                              src={getSafeAvatar(user)}
+                              className="w-12 h-12 rounded-full object-cover border border-slate-100 flex-shrink-0"
+                              alt={user.username}
+                            />
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-[15px] text-slate-900 truncate hover:text-pink-600 transition flex items-center gap-1">
+                                {user.username}
+                                {user.role === 'admin' && <span className="text-pink-500 text-[11px] bg-pink-50 px-1 py-0.5 rounded-full">✔</span>}
+                              </h4>
+                              <p className="text-[13px] text-slate-500 truncate">{user.fullname || `@${user.username}`}</p>
+                            </div>
+                          </Link>
+                          {!isMe && (
+                            <button
+                              onClick={() => handleFollowUserInSearch(user._id)}
+                              className={`px-4 py-1.5 rounded-xl text-[13px] font-bold transition cursor-pointer flex-shrink-0 ${
+                                isFollowing
+                                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                  : 'bg-pink-50 text-pink-600 hover:bg-pink-600 hover:text-white'
+                              }`}
+                            >
+                              {isFollowing ? 'Đang theo dõi' : 'Theo dõi'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {searchActiveTab === 'hashtags' && (
+                <div className="animate-fade-in">
+                  {searchResults.hashtags.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 bg-white rounded-[32px] border border-slate-100">
+                      Không tìm thấy hashtag nào cho "{searchQuery}".
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {searchResults.hashtags.map((hashtag) => (
+                        <Link
+                          key={hashtag._id || hashtag.name}
+                          to={`/explore/${encodeURIComponent(hashtag.name)}`}
+                          onClick={() => saveActiveSearchToHistory(searchQuery)}
+                          className="group p-4 bg-white hover:bg-gradient-to-tr hover:from-pink-50 hover:to-violet-50 border border-slate-100 hover:border-pink-200 rounded-[24px] flex items-center justify-between transition-all duration-300 shadow-sm hover:shadow"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="w-8 h-8 rounded-xl bg-pink-100 text-pink-600 font-black text-[14px] flex items-center justify-center group-hover:bg-pink-600 group-hover:text-white transition duration-300">
+                              #
+                            </span>
+                            <span className="font-bold text-[15px] text-slate-800 group-hover:text-pink-600 transition">
+                              #{hashtag.name}
+                            </span>
+                          </div>
+                          <span className="text-[12px] font-bold px-3 py-1 bg-slate-50 border border-slate-100 text-slate-500 rounded-full group-hover:border-pink-200 group-hover:text-pink-500 transition">
+                            {hashtag.count || 0} bài đăng
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {searchActiveTab === 'posts' && (
+                <div className="flex flex-col gap-6 animate-fade-in">
+                  {searchResults.posts.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 bg-white rounded-[32px] border border-slate-100">
+                      Không có bài viết nào chứa từ khóa "{searchQuery}".
+                    </div>
+                  ) : (
+                    searchResults.posts.map((post) => renderPostCard(post, searchResults.posts))
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ================= TRẠNG THÁI 1 - MẶC ĐỊNH (KHI CHƯA TÌM KIẾM) ================= */
+            <div className="space-y-8 animate-fade-in">
+              {/* Lịch sử tìm kiếm */}
+              {searchHistory.length > 0 && (
+                <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-50">
+                    <h3 className="font-black text-[16px] text-slate-800 flex items-center gap-2">
+                      <FiClock className="text-pink-500" /> Tìm kiếm gần đây
+                    </h3>
+                    <button
+                      onClick={handleClearAllHistory}
+                      className="text-pink-600 hover:text-pink-800 text-[13px] font-bold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <FiTrash2 size={14} /> Xóa tất cả
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {searchHistory.map((item) => (
+                      <div
+                        key={item._id}
+                        onClick={() => handleSearch(item.text)}
+                        className="group flex items-center gap-2 bg-slate-50 hover:bg-pink-50 border border-slate-100 hover:border-pink-200 rounded-full py-2 pl-4 pr-3.5 cursor-pointer transition-all duration-300"
+                      >
+                        <span className="text-[13.5px] font-bold text-slate-700 group-hover:text-pink-600 transition">
+                          {item.text}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteHistoryItem(item._id, e)}
+                          className="p-0.5 hover:bg-slate-200 hover:text-rose-500 text-slate-400 rounded-full transition cursor-pointer"
+                          aria-label="Xóa từ khóa"
+                        >
+                          <FiX size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ============ EXPLORE FEED (Tất cả bài chưa xem, người lạ ưu tiên) ============ */}
+              <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+                <div className="p-6">
+                  {exploreLoading && explorePosts.length === 0 ? (
+                    <div className="py-10 flex flex-col items-center justify-center">
+                      <FiLoader className="animate-spin text-3xl text-violet-500 mb-2" />
+                      <p className="text-slate-400 text-[13px]">Đang tải bài viết khám phá...</p>
+                    </div>
+                  ) : explorePosts.length === 0 ? (
+                    <div className="bg-gradient-to-br from-violet-50/50 to-pink-50/50 rounded-2xl p-8 text-center border border-violet-100/50">
+                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-violet-100 shadow-sm">
+                        <FiCompass className="text-violet-400" size={24} />
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-[15px]">Chưa có bài viết</h3>
+                      <p className="text-slate-500 text-[13.5px] mt-1.5 mb-5 leading-relaxed max-w-sm mx-auto">
+                        Bạn đã xem hết các bài viết khám phá mới nhất. Bạn có muốn làm mới để xem lại từ đầu không?
+                      </p>
+                      <button 
+                        onClick={() => {
+                          exploreSeenIdsRef.current = new Set();
+                          saveExploreSeenIds(new Set());
+                          fetchExplorePosts(true);
+                        }}
+                        className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition shadow-md shadow-violet-500/20 cursor-pointer"
+                      >
+                        Làm mới khám phá
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-6">
+                      {explorePosts.map((post) => renderPostCard(post, explorePosts))}
+                    </div>
+                  )}
+
+                  {/* Sentinel: infinite scroll trigger */}
+                  <div ref={exploreSentinelRef} className="h-4" />
+
+                  {/* Spinner load thêm */}
+                  {exploreLoading && explorePosts.length > 0 && (
+                    <div className="flex justify-center py-6">
+                      <div className="w-8 h-8 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+                    </div>
+                  )}
+
+                  {/* Hết bài */}
+                  {!exploreHasMore && explorePosts.length > 0 && (
+                    <div className="mt-6 text-center py-4 px-6 bg-gradient-to-r from-violet-50/50 to-purple-50/50 backdrop-blur-sm rounded-2xl border border-violet-100/50">
+                      <p className="text-slate-400 text-[13px] font-medium">
+                        🎉 Bạn đã xem hết tất cả bài viết! Hãy quay lại sau.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        ) : (
+          /* ================= GIAO DIỆN KẾT QUẢ CHỦ ĐỀ (URL /explore/:tag) ================= */
+          <div className="space-y-6 animate-fade-in">
+            {/* Tiêu đề Hashtag */}
+            <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex items-center gap-4 mb-8">
+              <div className="w-14 h-14 bg-gradient-to-tr from-pink-500 via-purple-500 to-violet-600 rounded-2xl flex items-center justify-center text-white text-[24px] font-black shadow-lg shadow-pink-500/20 animate-scale-up">
+                #
+              </div>
+              <div>
+                <h2 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">
+                  #{tag.toLowerCase()}
+                </h2>
+                <p className="text-slate-400 text-[13px] font-semibold mt-0.5">
+                  {posts.length > 0 ? `${posts.length} bài đăng thịnh hành` : 'Chưa có bài đăng'}
+                </p>
+              </div>
+            </div>
+
+            {posts.length === 0 ? (
+              <div className="bg-white/80 backdrop-blur-md rounded-[32px] p-12 border border-white/60 shadow-xl shadow-slate-200/50 text-center max-w-md mx-auto mt-8 relative overflow-hidden">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-gradient-to-br from-pink-400 to-violet-500 rounded-full blur-3xl opacity-10 pointer-events-none" />
+                <div className="w-20 h-20 bg-rose-50 border border-rose-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner animate-pulse">
+                  <FiSearch className="text-pink-500 opacity-60" size={32} />
+                </div>
+                <h3 className="text-[18px] font-black text-slate-800 leading-tight">
+                  Không tìm thấy bài viết
+                </h3>
+                <p className="text-slate-400 text-[13.5px] mt-2.5 leading-relaxed px-2">
+                  Chưa có bài viết nào với thẻ #{tag}. <br />Hãy là người đầu tiên!
+                </p>
+                <div className="mt-8">
+                  <Link
+                    to="/explore"
+                    className="inline-block py-3 px-6 bg-gradient-to-r from-pink-500 to-violet-600 hover:from-pink-600 hover:to-violet-700 text-white rounded-2xl font-bold text-[14px] shadow-lg shadow-pink-500/20 hover:shadow-xl hover:shadow-pink-500/30 transition duration-300"
+                  >
+                    Quay về Dashboard
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {posts.map((post) => renderPostCard(post, posts))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* POPUP INSTAGRAM STYLE COMMENTS OVERLAY */}
+      {activePost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => { setOpenCommentPostId(null); setReplyingTo(null); setCommentText(''); }}>
+          <div className="bg-white w-full max-w-[1000px] h-[95vh] md:h-[80vh] rounded-[32px] overflow-hidden shadow-2xl flex flex-col md:flex-row relative border border-slate-100 animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => { setOpenCommentPostId(null); setReplyingTo(null); setCommentText(''); }} className="absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center bg-white/80 hover:bg-rose-50 text-slate-700 hover:text-rose-500 rounded-full transition cursor-pointer shadow-md">
+              <FiX size={20} />
+            </button>
+            <div className="w-full md:w-[55%] h-[250px] md:h-full bg-slate-950 flex items-center justify-center overflow-hidden border-b md:border-b-0 md:border-r border-slate-100 relative">
+              <ImageCarousel images={activePost.images || (activePost.image ? [activePost.image] : [])} postId={activePost._id} handleLikePost={handleLikePost} posts={searchResults?.posts || posts} currentUser={currentUser} isPopup={true} />
+            </div>
+            <div className="w-full md:w-[45%] h-[350px] md:h-full flex flex-col bg-white">
+              <div className="flex items-center gap-3 p-4 border-b border-slate-100 flex-shrink-0"><img src={getSafeAvatar(activePost.userId)} className="w-10 h-10 rounded-full object-cover" alt="avt" /><div><h4 className="font-bold text-[15px] text-slate-900">{activePost.userId?.username || 'Người dùng'}</h4><p className="text-[12px] text-slate-500">{formatDate(activePost.createdAt)}</p></div></div>
+              <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+                <div className="flex gap-2">
+                  {(() => {
+                    const isLiked = activePost.likes?.includes(currentUser?._id);
+                    return (
+                      <button
+                        onClick={() => handleLikePost(activePost._id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl transition font-semibold text-[13px] cursor-pointer ${isLiked ? 'bg-pink-50 text-pink-600' : 'hover:bg-pink-50 text-slate-700 hover:text-pink-600'}`}
+                      >
+                        <FiHeart className={`text-[18px] ${isLiked ? 'fill-pink-500 text-pink-500' : ''}`} />
+                        <span>{activePost.likes?.length || 0}</span>
+                      </button>
+                    );
+                  })()}
+                  <button onClick={() => toggleCommentSection(activePost._id)} className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-pink-50 text-slate-700 hover:text-pink-600 transition font-semibold text-[13px] cursor-pointer">
+                    <FiMessageCircle size={18} /> Bình luận
+                  </button>
+                  <button onClick={() => handleOpenShare(activePost)} className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-100 text-slate-700 transition font-semibold text-[13px] cursor-pointer">
+                    <FiSend size={18} /> Chia sẻ
+                  </button>
+                </div>
+                <BookmarkButton
+                  isSaved={isPostSaved(activePost._id)}
+                  onClick={() => handleToggleSavePost(activePost._id)}
+                  className="!px-3 !py-2"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4.5 hide-scroll text-[14px]">
+                {activePost.content && (
+                  <div className="flex gap-3 pb-4 border-b border-slate-50">
+                    <img src={getSafeAvatar(activePost.userId)} className="w-8 h-8 rounded-full object-cover flex-shrink-0 mt-0.5" alt="avt" />
+                    <div>
+                      <span className="font-bold text-slate-900 mr-2">{activePost.userId?.username}</span>
+                      <span className="text-slate-800 whitespace-pre-wrap break-words">
+                        {renderContentWithHashtags(activePost.content)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {postComments[activePost._id]?.length > 0 ? (
+                  postComments[activePost._id].map((comment) => (
+                    <CommentItem
+                      key={comment._id}
+                      comment={comment}
+                      currentUser={currentUser}
+                      postAuthorId={activePost.userId?._id || activePost.userId}
+                      onDelete={handleDeleteComment}
+                      onReport={(targetComment) => {
+                        setReportingComment(targetComment);
+                        setCommentReportReason("");
+                      }}
+                      onReply={(parentId, username) => {
+                        setReplyingTo({ parentId, username });
+                        setCommentText(`@${username} `);
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-[13px] pt-10">Chưa có bình luận nào.</div>
+                )}
+              </div>
+              <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex-shrink-0">
+                {replyingTo && (
+                  <div className="flex items-center justify-between bg-pink-50 px-3 py-1 rounded-t-xl border-x border-t border-pink-100 text-[12px] mb-1">
+                    <p className="text-pink-600 truncate">Đang trả lời <b>{replyingTo.username}</b></p>
+                    <button onClick={() => { setReplyingTo(null); setCommentText(''); }} className="text-pink-600 hover:bg-pink-100 p-0.5 rounded-full cursor-pointer"><FiX /></button>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <img src={myAvatar} className="w-8 h-8 rounded-full object-cover" alt="my-avt" />
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      placeholder="Thêm bình luận..."
+                      className={`w-full bg-white border border-slate-200 text-[13px] pl-4 pr-10 py-2.5 focus:outline-none focus:border-pink-400 shadow-sm ${replyingTo ? 'rounded-b-xl' : 'rounded-full'}`}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSubmitComment(activePost._id)}
+                    />
+                    <button
+                      onClick={() => handleSubmitComment(activePost._id)}
+                      disabled={!commentText.trim()}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-pink-600 text-white rounded-full hover:bg-pink-700 disabled:bg-slate-300 cursor-pointer"
+                    >
+                      <FiSend size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL BÁO CÁO VI PHẠM */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setIsReportModalOpen(false)}>
+          <div className="bg-white w-full max-w-[480px] rounded-[28px] p-6 shadow-2xl border border-slate-100 relative animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setIsReportModalOpen(false)}
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-500 rounded-full transition cursor-pointer"
+            >
+              <FiX size={18} />
+            </button>
+            <div className="flex items-center gap-3 text-rose-600 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center"><FiFlag size={20} /></div>
+              <h3 className="text-[18px] font-black text-slate-900">Báo cáo vi phạm</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-500 mb-4 leading-relaxed">
+              Vui lòng chọn hoặc nhập lý do báo cáo bài viết này. Chúng tôi sẽ xem xét báo cáo của bạn trong vòng 24 giờ.
+            </p>
+            
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['Nội dung phản cảm', 'Spam / Tin giả', 'Ngược đãi / Bạo lực', 'Quấy rối / Bắt nạt', 'Bản quyền'].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setReportReason(reason)}
+                  className={`text-[12.5px] px-3.5 py-1.5 rounded-full font-semibold transition cursor-pointer border ${
+                    reportReason === reason
+                      ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              placeholder="Nhập lý do chi tiết hơn ở đây..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-[13px] focus:outline-none focus:border-rose-400 focus:bg-white transition mb-6 shadow-inner resize-none h-24"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsReportModalOpen(false)}
+                className="flex-1 py-3.5 rounded-2xl border border-slate-200 hover:bg-slate-50 text-[14px] font-bold text-slate-500 cursor-pointer transition"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSubmitReport}
+                disabled={submittingReport || !reportReason.trim()}
+                className="flex-1 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white text-[14px] font-bold cursor-pointer transition shadow-lg shadow-rose-500/20"
+              >
+                {submittingReport ? 'Đang gửi...' : 'Báo cáo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SỬA BÀI VIẾT */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setIsEditModalOpen(false)}>
+          <div className="bg-white w-full max-w-[500px] rounded-[28px] p-6 shadow-2xl border border-slate-100 relative animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setIsEditModalOpen(false)}
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-500 rounded-full transition cursor-pointer"
+            >
+              <FiX size={18} />
+            </button>
+            <div className="flex items-center gap-3 text-pink-600 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-pink-50 flex items-center justify-center"><FiLoader size={20} className="animate-spin text-pink-500" /></div>
+              <h3 className="text-[18px] font-black text-slate-900">Chỉnh sửa bài viết</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-500 mb-4 leading-relaxed">
+              Bạn có thể cập nhật lại nội dung mô tả của bài viết bên dưới.
+            </p>
+            
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="Nhập nội dung mô tả mới ở đây..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-[13px] focus:outline-none focus:border-pink-400 focus:bg-white transition mb-6 shadow-inner resize-none h-32 font-medium"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="flex-1 py-3.5 rounded-2xl border border-slate-200 hover:bg-slate-50 text-[14px] font-bold text-slate-500 cursor-pointer transition"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="flex-1 py-3.5 rounded-2xl bg-pink-600 hover:bg-pink-700 text-white text-[14px] font-bold cursor-pointer transition shadow-lg shadow-pink-500/20"
+              >
+                Cập nhật
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ShareModal
+        isOpen={!!sharePost}
+        onClose={() => setSharePost(null)}
+        post={sharePost}
+      />
+
+      {/* MODAL BÁO CÁO BÌNH LUẬN */}
+      {reportingComment && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setReportingComment(null)}>
+          <div className="bg-white w-full max-w-[480px] rounded-[28px] p-6 shadow-2xl border border-slate-100 relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setReportingComment(null)}
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-500 rounded-full transition cursor-pointer"
+            >
+              <FiX size={18} />
+            </button>
+            <div className="flex items-center gap-3 text-rose-600 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center"><FiFlag size={20} /></div>
+              <h3 className="text-[18px] font-black text-slate-900">Báo cáo bình luận</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-500 mb-4 leading-relaxed">
+              Vui lòng chọn hoặc nhập lý do báo cáo bình luận của <b>@{reportingComment.userId?.username || reportingComment.username}</b>. Chúng tôi sẽ xử lý nghiêm ngặt các vi phạm.
+            </p>
+            
+            {/* Gợi ý lý do nhanh */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {["Spam / Quảng cáo", "Nội dung phản cảm", "Quấy rối / Bắt nạt", "Tin giả / Lừa đảo", "Ngôn từ kích động thù hằn"].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setCommentReportReason(reason)}
+                  className={`text-[12.5px] px-3.5 py-1.5 rounded-full font-semibold transition cursor-pointer border ${
+                    commentReportReason === reason
+                      ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            {/* Nhập lý do khác */}
+            <textarea
+              rows={3}
+              value={commentReportReason}
+              onChange={(e) => setCommentReportReason(e.target.value)}
+              placeholder="Hoặc nhập lý do chi tiết hơn..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-[13.5px] focus:outline-none focus:border-rose-400 focus:bg-white transition mb-6 shadow-inner resize-none"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setReportingComment(null)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-[14px] font-bold transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleReportComment}
+                disabled={submittingCommentReport || !commentReportReason.trim()}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white disabled:bg-slate-300 rounded-2xl text-[14px] font-bold transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                {submittingCommentReport ? "Đang gửi..." : "Gửi báo cáo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ExplorePage;
