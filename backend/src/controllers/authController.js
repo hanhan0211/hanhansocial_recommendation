@@ -148,6 +148,15 @@ export const requestPasswordReset = async (req, res) => {
         username: user.fullname || user.username,
       });
     } catch (mailError) {
+      console.error("Mail Error:", mailError.message);
+      // Fallback for Render Free Tier blocking SMTP ports (465, 587)
+      if (mailError.code === "ETIMEDOUT" || mailError.message.includes("timeout")) {
+        console.log(`[RENDER FREE BYPASS] MÃ OTP CỦA ${user.email} LÀ: ${otp}`);
+        return res.json({ 
+          message: `Mã OTP của bạn là: ${otp} (Do dùng Server Render Free bị chặn gửi mail nên hiển thị tạm để test).` 
+        });
+      }
+
       user.resetPasswordOTP = "";
       user.resetPasswordOTPExpire = null;
       await user.save();

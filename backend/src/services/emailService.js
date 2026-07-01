@@ -20,9 +20,9 @@ const createTransporter = ({ user, pass, host, port, secure }) => {
     secure,
     requireTLS: !secure,
     auth: { user, pass },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 3000,
+    greetingTimeout: 3000,
+    socketTimeout: 5000,
   });
 };
 
