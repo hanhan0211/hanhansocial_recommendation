@@ -1,4 +1,8 @@
-const localOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
+const defaultOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://hanhansocial-recommendation.pages.dev",
+];
 
 const parseOrigins = (value) =>
   value
@@ -9,5 +13,5 @@ const parseOrigins = (value) =>
     : [];
 
 export const corsOrigins = [
-  ...new Set([...localOrigins, ...parseOrigins(process.env.FRONTEND_URLS || process.env.FRONTEND_URL)]),
+  ...new Set([...defaultOrigins, ...parseOrigins(process.env.FRONTEND_URLS || process.env.FRONTEND_URL)]),
 ];
