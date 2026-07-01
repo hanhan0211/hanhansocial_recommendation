@@ -160,9 +160,13 @@ const LoginPage = () => {
 
           <div className="flex items-center justify-end">
             <div className="text-sm">
-              <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
+              <button
+                type="button"
+                onClick={() => navigate("/forgot-password")}
+                className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
+              >
                 Quên mật khẩu?
-              </Link>
+              </button>
             </div>
           </div>
 
