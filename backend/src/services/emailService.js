@@ -5,11 +5,34 @@ const cleanEnv = (value) => value?.trim().replace(/^['"]|['"]$/g, '');
 const getMailConfig = () => {
   const user = cleanEnv(process.env.EMAIL_USER || process.env.GMAIL_USER || process.env.SMTP_USER);
   const pass = cleanEnv(process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
-  const host = cleanEnv(process.env.SMTP_HOST) || 'smtp.gmail.com';
-  const port = Number(cleanEnv(process.env.SMTP_PORT) || 465);
+  const host = cleanEnv(process.env.SMTP_HOST);
+  const port = Number(cleanEnv(process.env.SMTP_PORT) || 587);
   const from = cleanEnv(process.env.EMAIL_FROM) || user;
 
   return { user, pass, host, port, from };
+};
+
+const createTransporter = ({ user, pass, host, port }) => {
+  const baseOptions = {
+    auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  };
+
+  if (host) {
+    return nodemailer.createTransport({
+      ...baseOptions,
+      host,
+      port,
+      secure: port === 465,
+    });
+  }
+
+  return nodemailer.createTransport({
+    ...baseOptions,
+    service: 'gmail',
+  });
 };
 
 export const sendPasswordResetEmail = async ({ to, code, username }) => {
@@ -19,12 +42,7 @@ export const sendPasswordResetEmail = async ({ to, code, username }) => {
     throw new Error('Missing email SMTP configuration.');
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
+  const transporter = createTransporter({ user, pass, host, port });
 
   await transporter.sendMail({
     from: `"HanHan Social" <${from}>`,

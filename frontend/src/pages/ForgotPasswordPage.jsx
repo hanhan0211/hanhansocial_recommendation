@@ -38,12 +38,20 @@ const ForgotPasswordPage = () => {
 
     setLoading(true);
     try {
-      await api.post("auth/forgot-password", { email: account, account, username: account });
+      await api.post(
+        "auth/forgot-password",
+        { email: account, account, username: account },
+        { timeout: 20000 }
+      );
       setFormData((prev) => ({ ...prev, email: account }));
       setStep("reset");
       showToast("Ma xac nhan da duoc gui den email cua ban.", "success");
     } catch (error) {
-      showToast(error.response?.data?.message || "Khong the gui ma xac nhan.", "error");
+      const message =
+        error.code === "ECONNABORTED"
+          ? "Gui ma qua lau. Vui long thu lai sau hoac kiem tra cau hinh Gmail."
+          : error.response?.data?.message || "Khong the gui ma xac nhan.";
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }
