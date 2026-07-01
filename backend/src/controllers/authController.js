@@ -171,6 +171,8 @@ export const requestPasswordReset = async (req, res) => {
     user.passwordResetCodeHash = hashResetCode(code);
     user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
     user.passwordResetAttempts = 0;
+    user.passwordResetLastSentAt = new Date();
+    await user.save();
 
     try {
       await sendPasswordResetEmail({
@@ -186,9 +188,6 @@ export const requestPasswordReset = async (req, res) => {
       await user.save();
       throw mailError;
     }
-
-    user.passwordResetLastSentAt = new Date();
-    await user.save();
 
     return res.json({ message: genericMessage });
   } catch (error) {

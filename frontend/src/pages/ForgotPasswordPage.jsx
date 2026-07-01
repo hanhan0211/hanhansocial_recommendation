@@ -27,10 +27,7 @@ const ForgotPasswordPage = () => {
     }));
   };
 
-  const handleSendCode = async (e) => {
-    e.preventDefault();
-    const account = formData.email.trim();
-
+  const sendResetCode = async (account) => {
     if (!account) {
       showToast("Vui long nhap email hoac ten dang nhap.", "error");
       return;
@@ -40,7 +37,7 @@ const ForgotPasswordPage = () => {
     try {
       await api.post(
         "auth/forgot-password",
-        { email: account, account, username: account },
+        { account },
         { timeout: 20000 }
       );
       setFormData((prev) => ({ ...prev, email: account }));
@@ -55,6 +52,11 @@ const ForgotPasswordPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendCode = async (e) => {
+    e.preventDefault();
+    await sendResetCode(formData.email.trim());
   };
 
   const handleResetPassword = async (e) => {
@@ -181,7 +183,7 @@ const ForgotPasswordPage = () => {
 
             <button
               type="button"
-              onClick={handleSendCode}
+              onClick={() => sendResetCode(formData.email.trim())}
               disabled={loading}
               className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium disabled:text-blue-300"
             >
