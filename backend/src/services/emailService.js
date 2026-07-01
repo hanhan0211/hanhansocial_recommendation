@@ -1,37 +1,28 @@
 import nodemailer from 'nodemailer';
 
 const cleanEnv = (value) => value?.trim().replace(/^['"]|['"]$/g, '');
+const cleanSecret = (value) => cleanEnv(value)?.replace(/\s+/g, '');
 
 const getMailConfig = () => {
   const user = cleanEnv(process.env.EMAIL_USER || process.env.GMAIL_USER || process.env.SMTP_USER);
-  const pass = cleanEnv(process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
-  const host = cleanEnv(process.env.SMTP_HOST);
+  const pass = cleanSecret(process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
+  const host = cleanEnv(process.env.SMTP_HOST) || 'smtp.gmail.com';
   const port = Number(cleanEnv(process.env.SMTP_PORT) || 587);
   const from = cleanEnv(process.env.EMAIL_FROM) || user;
 
   return { user, pass, host, port, from };
 };
 
-const createTransporter = ({ user, pass, host, port }) => {
-  const baseOptions = {
+const createTransporter = ({ user, pass, host, port, secure }) => {
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    requireTLS: !secure,
     auth: { user, pass },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
-  };
-
-  if (host) {
-    return nodemailer.createTransport({
-      ...baseOptions,
-      host,
-      port,
-      secure: port === 465,
-    });
-  }
-
-  return nodemailer.createTransport({
-    ...baseOptions,
-    service: 'gmail',
   });
 };
 
@@ -42,9 +33,7 @@ export const sendPasswordResetEmail = async ({ to, code, username }) => {
     throw new Error('Missing email SMTP configuration.');
   }
 
-  const transporter = createTransporter({ user, pass, host, port });
-
-  await transporter.sendMail({
+  const mailOptions = {
     from: `"HanHan Social" <${from}>`,
     to,
     subject: 'Ma xac nhan dat lai mat khau HanHan Social',
@@ -60,5 +49,17 @@ export const sendPasswordResetEmail = async ({ to, code, username }) => {
         <p>Ma nay co hieu luc trong 10 phut. Neu ban khong yeu cau, hay bo qua email nay.</p>
       </div>
     `,
-  });
+  };
+
+  try {
+    const transporter = createTransporter({ user, pass, host, port, secure: port === 465 });
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    if (host === 'smtp.gmail.com' && port !== 465) {
+      const fallbackTransporter = createTransporter({ user, pass, host, port: 465, secure: true });
+      await fallbackTransporter.sendMail(mailOptions);
+      return;
+    }
+    throw error;
+  }
 };
