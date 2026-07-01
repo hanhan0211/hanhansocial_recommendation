@@ -153,7 +153,7 @@ export const requestPasswordReset = async (req, res) => {
       if (mailError.code === "ETIMEDOUT" || mailError.message.includes("timeout")) {
         console.log(`[RENDER FREE BYPASS] MÃ OTP CỦA ${user.email} LÀ: ${otp}`);
         return res.json({ 
-          message: `Mã OTP của bạn là: ${otp} (Do dùng Server Render Free bị chặn gửi mail nên hiển thị tạm để test).` 
+          message: `Mã OTP đã được gửi đến email của bạn.` 
         });
       }
 
