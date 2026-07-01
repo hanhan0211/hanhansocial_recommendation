@@ -87,7 +87,17 @@ export const uploadAvatarToCloudinary = (fileBuffer) => {
         transformation: [{ width: 500, height: 500, crop: 'limit' }],
       },
       (error, result) => {
-        if (error) return reject(error);
+        if (error) {
+          const providerStatus = error.http_code || error.statusCode || error.status;
+          const message =
+            providerStatus === 403 || error.message?.includes('403')
+              ? 'Cloudinary tu choi upload avatar (403). Hay kiem tra CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET tren Render.'
+              : error.message || 'Khong the upload avatar len Cloudinary.';
+          const uploadError = new Error(message);
+          uploadError.isCloudinaryUploadError = true;
+          uploadError.providerStatus = providerStatus;
+          return reject(uploadError);
+        }
         resolve(result.secure_url);
       }
     );
