@@ -33,7 +33,40 @@ const postImageStorage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: avatarStorage });
+const imageFileFilter = (req, file, cb) => {
+  if (!file.mimetype?.startsWith('image/')) {
+    return cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
+  }
+  cb(null, true);
+};
+
+const upload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
+});
 export const uploadPostImages = multer({ storage: postImageStorage });
+
+export const uploadAvatar = (req, res, next) => {
+  upload.single('avatar')(req, res, (error) => {
+    if (!error) return next();
+
+    console.error('Profile avatar upload failed:', error);
+
+    if (error instanceof multer.MulterError) {
+      const message =
+        error.code === 'LIMIT_FILE_SIZE'
+          ? 'Ảnh đại diện không được vượt quá 5MB.'
+          : 'File ảnh đại diện không hợp lệ.';
+      return res.status(400).json({ message });
+    }
+
+    return res.status(500).json({
+      message:
+        error.message ||
+        'Không thể tải ảnh đại diện lên Cloudinary. Vui lòng kiểm tra cấu hình upload.',
+    });
+  });
+};
 
 export default upload;

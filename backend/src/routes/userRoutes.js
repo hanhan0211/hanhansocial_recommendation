@@ -21,7 +21,7 @@ import {
   completeOnboarding,
 } from '../controllers/userController.js';
 import { protect } from '../middleware/authMiddleware.js';
-import upload from '../middleware/uploadMiddleware.js';
+import { uploadAvatar } from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -105,7 +105,7 @@ router.get('/suggested', protect, getSuggestedUsers);
 router.get('/connect-suggestions', protect, getConnectSuggestions);
 router.get('/share-suggestions', protect, getShareSuggestions);
 router.get('/profile/:username', protect, getUserProfile);
-router.put('/profile', protect, upload.single('avatar'), updateUserProfile);
+router.put('/profile', protect, uploadAvatar, updateUserProfile);
 
 // Bookmark / Saved posts
 router.put('/save-post/:postId', protect, toggleSavePost);

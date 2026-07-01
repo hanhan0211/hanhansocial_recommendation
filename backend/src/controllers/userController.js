@@ -261,20 +261,24 @@ export const updateUserProfile = async (req, res) => {
     }
 
     // Cập nhật thông tin
-    if (req.body.username && req.body.username !== user.username) {
+    const nextUsername = req.body.username?.trim().toLowerCase();
+    if (nextUsername && nextUsername !== user.username) {
       const usernameRegex = /^[a-z0-9_.]{3,30}$/;
-      if (!usernameRegex.test(req.body.username)) {
+      if (!usernameRegex.test(nextUsername)) {
         return res.status(400).json({ message: "Tên đăng nhập không hợp lệ" });
       }
-      const usernameExists = await User.findOne({ username: req.body.username });
+      const usernameExists = await User.findOne({
+        _id: { $ne: user._id },
+        username: { $regex: new RegExp(`^${nextUsername}$`, 'i') },
+      });
       if (usernameExists) {
         return res.status(400).json({ message: "Tên đăng nhập đã được sử dụng." });
       }
-      user.username = req.body.username;
+      user.username = nextUsername;
     }
 
-    user.fullname = req.body.fullname !== undefined ? req.body.fullname : user.fullname;
-    user.bio = req.body.bio !== undefined ? req.body.bio : user.bio;
+    user.fullname = req.body.fullname !== undefined ? req.body.fullname.trim() : user.fullname;
+    user.bio = req.body.bio !== undefined ? req.body.bio.trim() : user.bio;
     
     // Cập nhật chế độ riêng tư
     if (req.body.isPrivateAccount !== undefined) {

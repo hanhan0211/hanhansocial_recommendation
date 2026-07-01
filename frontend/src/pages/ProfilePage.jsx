@@ -540,22 +540,24 @@ const ProfilePage = () => {
 
     setIsUpdating(true);
 
-    const formData = new FormData();
-    formData.append("username", editUsername);
-    formData.append("fullname", editFullname);
-    formData.append("bio", editBio);
+    const payload = selectedFile
+      ? new FormData()
+      : {
+          username: editUsername.trim().toLowerCase(),
+          fullname: editFullname.trim(),
+          bio: editBio.trim(),
+        };
+
     if (selectedFile) {
-      formData.append("avatar", selectedFile);
+      payload.append("username", editUsername.trim().toLowerCase());
+      payload.append("fullname", editFullname.trim());
+      payload.append("bio", editBio.trim());
+      payload.append("avatar", selectedFile);
     }
 
     try {
       console.log("📤 Sending profile update...");
-      const res = await api.put(`users/profile`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
-        }
-      });
+      const res = await api.put(`users/profile`, payload);
 
       console.log("✅ Profile update response:", res.data);
 
