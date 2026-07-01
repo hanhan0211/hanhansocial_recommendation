@@ -45,10 +45,15 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: imageFileFilter,
 });
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
+});
 export const uploadPostImages = multer({ storage: postImageStorage });
 
 export const uploadAvatar = (req, res, next) => {
-  upload.single('avatar')(req, res, (error) => {
+  avatarUpload.single('avatar')(req, res, (error) => {
     if (!error) return next();
 
     console.error('Profile avatar upload failed:', error);
@@ -66,6 +71,28 @@ export const uploadAvatar = (req, res, next) => {
         error.message ||
         'Không thể tải ảnh đại diện lên Cloudinary. Vui lòng kiểm tra cấu hình upload.',
     });
+  });
+};
+
+export const uploadAvatarToCloudinary = (fileBuffer) => {
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    throw new Error('Missing Cloudinary configuration.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'hanhan_social_avatars',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+        transformation: [{ width: 500, height: 500, crop: 'limit' }],
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result.secure_url);
+      }
+    );
+
+    stream.end(fileBuffer);
   });
 };
 

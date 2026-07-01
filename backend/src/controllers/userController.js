@@ -2,6 +2,7 @@ import User from '../models/User.js'; // Đảm bảo tên file User.js khớp v
 import Post from '../models/Post.js'; // Đảm bảo tên file Post.js khớp với thực tế
 import { createNotification } from './notificationController.js';
 import { updateAuthorScore, updateHashtagScore } from '../services/recommendService.js';
+import { uploadAvatarToCloudinary } from '../middleware/uploadMiddleware.js';
 import mongoose from 'mongoose';
 
 // ==========================================
@@ -287,8 +288,8 @@ export const updateUserProfile = async (req, res) => {
 
     // Cập nhật ảnh nếu có file upload
     if (req.file) {
-      user.avatar = req.file.path;
-      console.log("✅ Avatar updated to:", req.file.path);
+      user.avatar = await uploadAvatarToCloudinary(req.file.buffer);
+      console.log("✅ Avatar updated to:", user.avatar);
     }
 
     const updatedUser = await user.save();
