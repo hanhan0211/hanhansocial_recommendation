@@ -2,6 +2,16 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import crypto from "crypto";
+import { sendPasswordResetEmail } from "../services/emailService.js";
+
+const hashResetCode = (code) =>
+  crypto
+    .createHash("sha256")
+    .update(`${code}:${process.env.JWT_SECRET || "reset-secret"}`)
+    .digest("hex");
+
+const createResetCode = () => crypto.randomInt(100000, 1000000).toString();
 
 export const register = async (req, res) => {
   try {
@@ -119,6 +129,107 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Lỗi hệ thống khi đăng nhập", error: error.message });
+  }
+};
+
+export const requestPasswordReset = async (req, res) => {
+  try {
+    const email = req.body.email?.trim().toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({ message: "Vui long nhap email." });
+    }
+
+    const user = await User.findOne({ email });
+    const genericMessage = "Neu email ton tai, ma xac nhan da duoc gui den hop thu cua ban.";
+
+    if (!user) {
+      return res.json({ message: genericMessage });
+    }
+
+    if (
+      user.passwordResetLastSentAt &&
+      Date.now() - user.passwordResetLastSentAt.getTime() < 60 * 1000
+    ) {
+      return res.status(429).json({ message: "Vui long doi 60 giay truoc khi gui lai ma." });
+    }
+
+    const code = createResetCode();
+    user.passwordResetCodeHash = hashResetCode(code);
+    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
+    user.passwordResetAttempts = 0;
+    user.passwordResetLastSentAt = new Date();
+    await user.save();
+
+    await sendPasswordResetEmail({
+      to: user.email,
+      code,
+      username: user.fullname || user.username,
+    });
+
+    return res.json({ message: genericMessage });
+  } catch (error) {
+    console.error("requestPasswordReset error:", error);
+    return res.status(500).json({
+      message: error.message === "Missing email SMTP configuration."
+        ? "Chua cau hinh email gui ma xac nhan."
+        : "Khong the gui ma xac nhan. Vui long thu lai sau.",
+    });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const email = req.body.email?.trim().toLowerCase();
+    const code = req.body.code?.trim();
+    const password = req.body.password;
+
+    if (!email || !code || !password) {
+      return res.status(400).json({ message: "Vui long nhap day du email, ma xac nhan va mat khau moi." });
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ message: "Ma xac nhan phai gom 6 chu so." });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Mat khau moi phai co it nhat 6 ky tu." });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user || !user.passwordResetCodeHash || !user.passwordResetExpires) {
+      return res.status(400).json({ message: "Ma xac nhan khong hop le hoac da het han." });
+    }
+
+    if (user.passwordResetExpires.getTime() < Date.now()) {
+      user.passwordResetCodeHash = "";
+      user.passwordResetExpires = null;
+      user.passwordResetAttempts = 0;
+      await user.save();
+      return res.status(400).json({ message: "Ma xac nhan da het han. Vui long gui lai ma moi." });
+    }
+
+    if (user.passwordResetAttempts >= 5) {
+      return res.status(429).json({ message: "Ban da nhap sai qua nhieu lan. Vui long gui lai ma moi." });
+    }
+
+    if (hashResetCode(code) !== user.passwordResetCodeHash) {
+      user.passwordResetAttempts += 1;
+      await user.save();
+      return res.status(400).json({ message: "Ma xac nhan khong dung." });
+    }
+
+    user.password = await bcrypt.hash(password, 10);
+    user.passwordResetCodeHash = "";
+    user.passwordResetExpires = null;
+    user.passwordResetAttempts = 0;
+    user.passwordResetLastSentAt = null;
+    await user.save();
+
+    return res.json({ message: "Dat lai mat khau thanh cong. Vui long dang nhap lai." });
+  } catch (error) {
+    console.error("resetPassword error:", error);
+    return res.status(500).json({ message: "Khong the dat lai mat khau. Vui long thu lai sau." });
   }
 };
 

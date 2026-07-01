@@ -9,6 +9,7 @@ const config = {
   cloud_name: cleanEnv(process.env.CLOUDINARY_CLOUD_NAME),
   api_key: cleanEnv(process.env.CLOUDINARY_API_KEY),
   api_secret: cleanEnv(process.env.CLOUDINARY_API_SECRET),
+  upload_preset: cleanEnv(process.env.CLOUDINARY_UPLOAD_PRESET),
 };
 
 cloudinary.config(config);
@@ -23,6 +24,7 @@ console.log('Cloudinary env check:', {
   cloud_name: config.cloud_name || 'MISSING',
   api_key: mask(config.api_key),
   api_secret: config.api_secret ? 'SET' : 'MISSING',
+  upload_preset: config.upload_preset || 'NOT_SET',
 });
 
 try {
@@ -31,11 +33,25 @@ try {
 
   const tinyPng =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
-  const upload = await cloudinary.uploader.upload(tinyPng, {
-    folder: 'hanhan_social_avatars',
-    public_id: `cloudinary_test_${Date.now()}`,
-    overwrite: true,
-  });
+  const upload = config.upload_preset
+    ? await fetch(`https://api.cloudinary.com/v1_1/${config.cloud_name}/image/upload`, {
+        method: 'POST',
+        body: (() => {
+          const formData = new FormData();
+          formData.append('file', tinyPng);
+          formData.append('upload_preset', config.upload_preset);
+          return formData;
+        })(),
+      }).then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error?.message || response.statusText);
+        return payload;
+      })
+    : await cloudinary.uploader.upload(tinyPng, {
+        folder: 'hanhan_social_avatars',
+        public_id: `cloudinary_test_${Date.now()}`,
+        overwrite: true,
+      });
 
   console.log('Cloudinary upload OK:', {
     secure_url: upload.secure_url,

@@ -16,6 +16,7 @@ const cloudinaryConfig = {
   cloud_name: cleanEnv(process.env.CLOUDINARY_CLOUD_NAME),
   api_key: cleanEnv(process.env.CLOUDINARY_API_KEY),
   api_secret: cleanEnv(process.env.CLOUDINARY_API_SECRET),
+  upload_preset: cleanEnv(process.env.CLOUDINARY_UPLOAD_PRESET),
 };
 
 cloudinary.config(cloudinaryConfig);
@@ -100,24 +101,34 @@ export const uploadAvatar = (req, res, next) => {
 };
 
 export const uploadAvatarToCloudinary = async (fileBuffer, mimetype = 'image/jpeg') => {
-  if (!cloudinaryConfig.cloud_name || !cloudinaryConfig.api_key || !cloudinaryConfig.api_secret) {
-    throw new Error('Missing Cloudinary configuration.');
+  if (!cloudinaryConfig.cloud_name) {
+    throw new Error('Missing Cloudinary cloud name.');
   }
 
-  const timestamp = Math.floor(Date.now() / 1000);
-  const uploadParams = {
-    folder: 'hanhan_social_avatars',
-    timestamp,
-  };
-  const signature = createCloudinarySignature(uploadParams);
   const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
   const formData = new FormData();
 
   formData.append('file', dataUri);
-  formData.append('folder', uploadParams.folder);
-  formData.append('timestamp', String(timestamp));
-  formData.append('api_key', cloudinaryConfig.api_key);
-  formData.append('signature', signature);
+
+  if (cloudinaryConfig.upload_preset) {
+    formData.append('upload_preset', cloudinaryConfig.upload_preset);
+  } else {
+    if (!cloudinaryConfig.api_key || !cloudinaryConfig.api_secret) {
+      throw new Error('Missing Cloudinary API key or secret.');
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const uploadParams = {
+      folder: 'hanhan_social_avatars',
+      timestamp,
+    };
+    const signature = createCloudinarySignature(uploadParams);
+
+    formData.append('folder', uploadParams.folder);
+    formData.append('timestamp', String(timestamp));
+    formData.append('api_key', cloudinaryConfig.api_key);
+    formData.append('signature', signature);
+  }
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/image/upload`,
@@ -145,7 +156,7 @@ export const uploadAvatarToCloudinary = async (fileBuffer, mimetype = 'image/jpe
 
     const uploadError = new Error(
       details.message ||
-        'Cloudinary tu choi upload avatar. Hay kiem tra CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET tren Render.'
+        'Cloudinary tu choi upload avatar. Hay cap quyen create cho API key hoac cau hinh CLOUDINARY_UPLOAD_PRESET.'
     );
     uploadError.isCloudinaryUploadError = true;
     uploadError.providerStatus = response.status;
