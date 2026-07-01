@@ -171,14 +171,24 @@ export const requestPasswordReset = async (req, res) => {
     user.passwordResetCodeHash = hashResetCode(code);
     user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
     user.passwordResetAttempts = 0;
+
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        code,
+        username: user.fullname || user.username,
+      });
+    } catch (mailError) {
+      user.passwordResetCodeHash = "";
+      user.passwordResetExpires = null;
+      user.passwordResetAttempts = 0;
+      user.passwordResetLastSentAt = null;
+      await user.save();
+      throw mailError;
+    }
+
     user.passwordResetLastSentAt = new Date();
     await user.save();
-
-    await sendPasswordResetEmail({
-      to: user.email,
-      code,
-      username: user.fullname || user.username,
-    });
 
     return res.json({ message: genericMessage });
   } catch (error) {
@@ -186,7 +196,7 @@ export const requestPasswordReset = async (req, res) => {
     return res.status(500).json({
       message: error.message === "Missing email SMTP configuration."
         ? "Chua cau hinh email gui ma xac nhan."
-        : "Khong the gui ma xac nhan. Vui long thu lai sau.",
+        : `Khong the gui ma xac nhan: ${error.response || error.message}`,
     });
   }
 };
