@@ -9,10 +9,21 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+const cleanEnv = (value) => value?.trim().replace(/^['"]|['"]$/g, '');
+
+const cloudinaryConfig = {
+  cloud_name: cleanEnv(process.env.CLOUDINARY_CLOUD_NAME),
+  api_key: cleanEnv(process.env.CLOUDINARY_API_KEY),
+  api_secret: cleanEnv(process.env.CLOUDINARY_API_SECRET),
+};
+
+cloudinary.config(cloudinaryConfig);
+
+const getCloudinaryErrorDetails = (error) => ({
+  message: error?.message,
+  httpCode: error?.http_code,
+  statusCode: error?.statusCode || error?.status,
+  name: error?.name,
 });
 
 const avatarStorage = new CloudinaryStorage({
@@ -75,7 +86,7 @@ export const uploadAvatar = (req, res, next) => {
 };
 
 export const uploadAvatarToCloudinary = (fileBuffer) => {
-  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  if (!cloudinaryConfig.cloud_name || !cloudinaryConfig.api_key || !cloudinaryConfig.api_secret) {
     throw new Error('Missing Cloudinary configuration.');
   }
 
@@ -88,6 +99,7 @@ export const uploadAvatarToCloudinary = (fileBuffer) => {
       },
       (error, result) => {
         if (error) {
+          console.error('Cloudinary avatar upload error:', getCloudinaryErrorDetails(error));
           const providerStatus = error.http_code || error.statusCode || error.status;
           const message =
             providerStatus === 403 || error.message?.includes('403')

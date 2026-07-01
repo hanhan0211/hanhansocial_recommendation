@@ -288,8 +288,15 @@ export const updateUserProfile = async (req, res) => {
 
     // Cập nhật ảnh nếu có file upload
     if (req.file) {
-      user.avatar = await uploadAvatarToCloudinary(req.file.buffer);
-      console.log("✅ Avatar updated to:", user.avatar);
+      try {
+        user.avatar = await uploadAvatarToCloudinary(req.file.buffer);
+        console.log("✅ Avatar updated to:", user.avatar);
+      } catch (uploadError) {
+        console.error("Avatar upload failed:", uploadError.message);
+        return res.status(502).json({
+          message: uploadError.message || "Khong the upload avatar len Cloudinary.",
+        });
+      }
     }
 
     const updatedUser = await user.save();
