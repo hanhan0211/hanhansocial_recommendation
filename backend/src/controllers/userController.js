@@ -289,7 +289,7 @@ export const updateUserProfile = async (req, res) => {
     // Cập nhật ảnh nếu có file upload
     if (req.file) {
       try {
-        user.avatar = await uploadAvatarToCloudinary(req.file.buffer);
+        user.avatar = await uploadAvatarToCloudinary(req.file.buffer, req.file.mimetype);
         console.log("✅ Avatar updated to:", user.avatar);
       } catch (uploadError) {
         console.error("Avatar upload failed:", uploadError.message);

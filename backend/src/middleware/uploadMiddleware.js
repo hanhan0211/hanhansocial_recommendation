@@ -5,6 +5,7 @@ import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../../.env') });
@@ -25,6 +26,19 @@ const getCloudinaryErrorDetails = (error) => ({
   statusCode: error?.statusCode || error?.status,
   name: error?.name,
 });
+
+const createCloudinarySignature = (params) => {
+  const payload = Object.keys(params)
+    .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
+    .sort()
+    .map((key) => `${key}=${params[key]}`)
+    .join('&');
+
+  return crypto
+    .createHash('sha1')
+    .update(`${payload}${cloudinaryConfig.api_secret}`)
+    .digest('hex');
+};
 
 const avatarStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
@@ -85,37 +99,60 @@ export const uploadAvatar = (req, res, next) => {
   });
 };
 
-export const uploadAvatarToCloudinary = (fileBuffer) => {
+export const uploadAvatarToCloudinary = async (fileBuffer, mimetype = 'image/jpeg') => {
   if (!cloudinaryConfig.cloud_name || !cloudinaryConfig.api_key || !cloudinaryConfig.api_secret) {
     throw new Error('Missing Cloudinary configuration.');
   }
 
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: 'hanhan_social_avatars',
-        allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
-        transformation: [{ width: 500, height: 500, crop: 'limit' }],
-      },
-      (error, result) => {
-        if (error) {
-          console.error('Cloudinary avatar upload error:', getCloudinaryErrorDetails(error));
-          const providerStatus = error.http_code || error.statusCode || error.status;
-          const message =
-            providerStatus === 403 || error.message?.includes('403')
-              ? 'Cloudinary tu choi upload avatar (403). Hay kiem tra CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET tren Render.'
-              : error.message || 'Khong the upload avatar len Cloudinary.';
-          const uploadError = new Error(message);
-          uploadError.isCloudinaryUploadError = true;
-          uploadError.providerStatus = providerStatus;
-          return reject(uploadError);
-        }
-        resolve(result.secure_url);
-      }
-    );
+  const timestamp = Math.floor(Date.now() / 1000);
+  const uploadParams = {
+    folder: 'hanhan_social_avatars',
+    timestamp,
+  };
+  const signature = createCloudinarySignature(uploadParams);
+  const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
+  const formData = new FormData();
 
-    stream.end(fileBuffer);
-  });
+  formData.append('file', dataUri);
+  formData.append('folder', uploadParams.folder);
+  formData.append('timestamp', String(timestamp));
+  formData.append('api_key', cloudinaryConfig.api_key);
+  formData.append('signature', signature);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/image/upload`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
+
+  const rawText = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(rawText);
+  } catch {
+    payload = { error: { message: rawText } };
+  }
+
+  if (!response.ok) {
+    const details = {
+      message: payload?.error?.message || rawText || response.statusText,
+      httpCode: response.status,
+      name: 'CloudinaryUploadError',
+    };
+    console.error('Cloudinary avatar upload error:', details);
+
+    const uploadError = new Error(
+      details.message ||
+        'Cloudinary tu choi upload avatar. Hay kiem tra CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET tren Render.'
+    );
+    uploadError.isCloudinaryUploadError = true;
+    uploadError.providerStatus = response.status;
+    throw uploadError;
+  }
+
+  return payload.secure_url;
 };
 
 export default upload;
