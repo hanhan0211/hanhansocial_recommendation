@@ -10,7 +10,7 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import connectDB from "./config/db.js";
-import { corsOrigins } from "./config/corsOrigins.js";
+import { corsOptions } from "./config/corsOrigins.js";
 import { initSocket } from "./socket/socket.js";
 
 import authRoutes from "./routes/authRoutes.js";
@@ -31,12 +31,7 @@ connectDB();
 
 const app = express();
 
-app.use(
-  cors({
-    origin: corsOrigins,
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use("/api/posts", postRoutes);

@@ -28,14 +28,22 @@ const ForgotPassword = () => {
 
     setLoading(true);
     try {
-      const response = await api.post("auth/forgot-password", {
-        email: email.trim(),
-      });
+      const response = await api.post(
+        "auth/forgot-password",
+        { email: email.trim() },
+        { timeout: 20000 }
+      );
 
       setMessage(response.data.message || "Mã OTP đã được gửi đến email của bạn.");
       setStep(2);
     } catch (err) {
-      setError(err.response?.data?.message || "Không thể gửi mã OTP. Vui lòng thử lại.");
+      const timeoutMessage =
+        "Gửi mã quá lâu. Vui lòng kiểm tra backend, mạng hoặc cấu hình Gmail App Password.";
+      setError(
+        err.code === "ECONNABORTED"
+          ? timeoutMessage
+          : err.response?.data?.message || "Không thể gửi mã OTP. Vui lòng thử lại."
+      );
     } finally {
       setLoading(false);
     }
@@ -57,16 +65,24 @@ const ForgotPassword = () => {
 
     setLoading(true);
     try {
-      const response = await api.post("auth/reset-password", {
-        email: email.trim(),
-        otp,
-        newPassword,
-      });
+      const response = await api.post(
+        "auth/reset-password",
+        {
+          email: email.trim(),
+          otp,
+          newPassword,
+        },
+        { timeout: 15000 }
+      );
 
       setMessage(response.data.message || "Đổi mật khẩu thành công.");
       setTimeout(() => navigate("/login"), 1200);
     } catch (err) {
-      setError(err.response?.data?.message || "Không thể đổi mật khẩu. Vui lòng thử lại.");
+      setError(
+        err.code === "ECONNABORTED"
+          ? "Kết nối quá lâu. Vui lòng thử lại."
+          : err.response?.data?.message || "Không thể đổi mật khẩu. Vui lòng thử lại."
+      );
     } finally {
       setLoading(false);
     }
