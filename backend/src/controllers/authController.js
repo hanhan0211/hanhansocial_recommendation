@@ -2,29 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import crypto from "crypto";
-import { sendPasswordResetEmail } from "../services/emailService.js";
-
-const hashResetCode = (code) =>
-  crypto
-    .createHash("sha256")
-    .update(`${code}:${process.env.JWT_SECRET || "reset-secret"}`)
-    .digest("hex");
-
-const createResetCode = () => crypto.randomInt(100000, 1000000).toString();
-
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const findUserByResetIdentifier = async (identifier) => {
-  const value = identifier.trim().toLowerCase();
-  if (value.includes("@")) {
-    return User.findOne({ email: value });
-  }
-
-  return User.findOne({
-    username: { $regex: new RegExp(`^${escapeRegex(value)}$`, "i") },
-  });
-};
+import sendEmail from "../utils/sendEmail.js";
 
 export const register = async (req, res) => {
   try {
@@ -147,105 +125,99 @@ export const login = async (req, res) => {
 
 export const requestPasswordReset = async (req, res) => {
   try {
-    const identifier = (req.body.email || req.body.account || req.body.username || "").trim();
+    const email = req.body.email?.trim().toLowerCase();
 
-    if (!identifier) {
-      return res.status(400).json({ message: "Vui long nhap email hoac ten dang nhap." });
+    if (!email) {
+      return res.status(400).json({ message: "Vui long nhap email." });
     }
 
-    const user = await findUserByResetIdentifier(identifier);
-    const genericMessage = "Neu email ton tai, ma xac nhan da duoc gui den hop thu cua ban.";
-
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.json({ message: genericMessage });
+      return res.status(404).json({ message: "Email nay chua duoc dang ky." });
     }
 
-    if (
-      user.passwordResetLastSentAt &&
-      Date.now() - user.passwordResetLastSentAt.getTime() < 60 * 1000
-    ) {
-      return res.status(429).json({ message: "Vui long doi 60 giay truoc khi gui lai ma." });
-    }
-
-    const code = createResetCode();
-    user.passwordResetCodeHash = hashResetCode(code);
-    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
-    user.passwordResetAttempts = 0;
-    user.passwordResetLastSentAt = new Date();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordOTP = otp;
+    user.resetPasswordOTPExpire = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     try {
-      await sendPasswordResetEmail({
-        to: user.email,
-        code,
-        username: user.fullname || user.username,
+      await sendEmail({
+        email: user.email,
+        subject: "Ma OTP dat lai mat khau HanHan Social",
+        message: `Ma OTP dat lai mat khau cua ban la ${otp}. Ma co hieu luc trong 10 phut.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">
+            <h2 style="margin: 0 0 12px;">Dat lai mat khau HanHan Social</h2>
+            <p>Xin chao ${user.fullname || user.username || "ban"},</p>
+            <p>Ma OTP dat lai mat khau cua ban la:</p>
+            <div style="display: inline-block; padding: 14px 20px; border-radius: 10px; background: #f3f4f6; font-size: 28px; font-weight: 700; letter-spacing: 6px;">
+              ${otp}
+            </div>
+            <p>Ma nay co hieu luc trong 10 phut. Neu ban khong yeu cau, hay bo qua email nay.</p>
+          </div>
+        `,
       });
     } catch (mailError) {
-      user.passwordResetCodeHash = "";
-      user.passwordResetExpires = null;
-      user.passwordResetAttempts = 0;
-      user.passwordResetLastSentAt = null;
+      user.resetPasswordOTP = "";
+      user.resetPasswordOTPExpire = null;
       await user.save();
       throw mailError;
     }
 
-    return res.json({ message: genericMessage });
+    return res.json({ message: "Ma OTP da duoc gui den email cua ban." });
   } catch (error) {
     console.error("requestPasswordReset error:", error);
     return res.status(500).json({
-      message: error.message === "Missing email SMTP configuration."
-        ? "Chua cau hinh email gui ma xac nhan."
-        : `Khong the gui ma xac nhan: ${error.response || error.message}`,
+      message:
+        error.message === "Missing Gmail email configuration."
+          ? "Chua cau hinh EMAIL_USER/EMAIL_PASS trong file .env."
+          : "Khong the gui ma OTP. Vui long thu lai sau.",
     });
   }
 };
 
 export const resetPassword = async (req, res) => {
   try {
-    const identifier = (req.body.email || req.body.account || req.body.username || "").trim();
-    const code = req.body.code?.trim();
-    const password = req.body.password;
+    const email = req.body.email?.trim().toLowerCase();
+    const otp = req.body.otp?.trim();
+    const newPassword = req.body.newPassword;
 
-    if (!identifier || !code || !password) {
-      return res.status(400).json({ message: "Vui long nhap day du email/ten dang nhap, ma xac nhan va mat khau moi." });
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ message: "Vui long nhap day du email, OTP va mat khau moi." });
     }
 
-    if (!/^\d{6}$/.test(code)) {
-      return res.status(400).json({ message: "Ma xac nhan phai gom 6 chu so." });
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ message: "Ma OTP phai gom 6 chu so." });
     }
 
-    if (password.length < 6) {
+    if (newPassword.length < 6) {
       return res.status(400).json({ message: "Mat khau moi phai co it nhat 6 ky tu." });
     }
 
-    const user = await findUserByResetIdentifier(identifier);
-    if (!user || !user.passwordResetCodeHash || !user.passwordResetExpires) {
-      return res.status(400).json({ message: "Ma xac nhan khong hop le hoac da het han." });
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "Khong tim thay tai khoan voi email nay." });
     }
 
-    if (user.passwordResetExpires.getTime() < Date.now()) {
-      user.passwordResetCodeHash = "";
-      user.passwordResetExpires = null;
-      user.passwordResetAttempts = 0;
+    if (!user.resetPasswordOTP || !user.resetPasswordOTPExpire) {
+      return res.status(400).json({ message: "Ma OTP khong hop le hoac da het han." });
+    }
+
+    if (user.resetPasswordOTP !== otp) {
+      return res.status(400).json({ message: "Ma OTP khong dung." });
+    }
+
+    if (user.resetPasswordOTPExpire.getTime() < Date.now()) {
+      user.resetPasswordOTP = "";
+      user.resetPasswordOTPExpire = null;
       await user.save();
-      return res.status(400).json({ message: "Ma xac nhan da het han. Vui long gui lai ma moi." });
+      return res.status(400).json({ message: "Ma OTP da het han. Vui long gui lai ma moi." });
     }
 
-    if (user.passwordResetAttempts >= 5) {
-      return res.status(429).json({ message: "Ban da nhap sai qua nhieu lan. Vui long gui lai ma moi." });
-    }
-
-    if (hashResetCode(code) !== user.passwordResetCodeHash) {
-      user.passwordResetAttempts += 1;
-      await user.save();
-      return res.status(400).json({ message: "Ma xac nhan khong dung." });
-    }
-
-    user.password = await bcrypt.hash(password, 10);
-    user.passwordResetCodeHash = "";
-    user.passwordResetExpires = null;
-    user.passwordResetAttempts = 0;
-    user.passwordResetLastSentAt = null;
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.resetPasswordOTP = "";
+    user.resetPasswordOTPExpire = null;
     await user.save();
 
     return res.json({ message: "Dat lai mat khau thanh cong. Vui long dang nhap lai." });
