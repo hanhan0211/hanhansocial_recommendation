@@ -13,6 +13,19 @@ const hashResetCode = (code) =>
 
 const createResetCode = () => crypto.randomInt(100000, 1000000).toString();
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const findUserByResetIdentifier = async (identifier) => {
+  const value = identifier.trim().toLowerCase();
+  if (value.includes("@")) {
+    return User.findOne({ email: value });
+  }
+
+  return User.findOne({
+    username: { $regex: new RegExp(`^${escapeRegex(value)}$`, "i") },
+  });
+};
+
 export const register = async (req, res) => {
   try {
     const username = req.body.username?.trim();
@@ -134,13 +147,13 @@ export const login = async (req, res) => {
 
 export const requestPasswordReset = async (req, res) => {
   try {
-    const email = req.body.email?.trim().toLowerCase();
+    const identifier = (req.body.email || req.body.account || req.body.username || "").trim();
 
-    if (!email) {
-      return res.status(400).json({ message: "Vui long nhap email." });
+    if (!identifier) {
+      return res.status(400).json({ message: "Vui long nhap email hoac ten dang nhap." });
     }
 
-    const user = await User.findOne({ email });
+    const user = await findUserByResetIdentifier(identifier);
     const genericMessage = "Neu email ton tai, ma xac nhan da duoc gui den hop thu cua ban.";
 
     if (!user) {
@@ -180,12 +193,12 @@ export const requestPasswordReset = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const email = req.body.email?.trim().toLowerCase();
+    const identifier = (req.body.email || req.body.account || req.body.username || "").trim();
     const code = req.body.code?.trim();
     const password = req.body.password;
 
-    if (!email || !code || !password) {
-      return res.status(400).json({ message: "Vui long nhap day du email, ma xac nhan va mat khau moi." });
+    if (!identifier || !code || !password) {
+      return res.status(400).json({ message: "Vui long nhap day du email/ten dang nhap, ma xac nhan va mat khau moi." });
     }
 
     if (!/^\d{6}$/.test(code)) {
@@ -196,7 +209,7 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Mat khau moi phai co it nhat 6 ky tu." });
     }
 
-    const user = await User.findOne({ email });
+    const user = await findUserByResetIdentifier(identifier);
     if (!user || !user.passwordResetCodeHash || !user.passwordResetExpires) {
       return res.status(400).json({ message: "Ma xac nhan khong hop le hoac da het han." });
     }

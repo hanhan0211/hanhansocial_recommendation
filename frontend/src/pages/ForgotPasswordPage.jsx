@@ -29,17 +29,17 @@ const ForgotPasswordPage = () => {
 
   const handleSendCode = async (e) => {
     e.preventDefault();
-    const email = formData.email.trim().toLowerCase();
+    const account = formData.email.trim();
 
-    if (!email) {
-      showToast("Vui long nhap email.", "error");
+    if (!account) {
+      showToast("Vui long nhap email hoac ten dang nhap.", "error");
       return;
     }
 
     setLoading(true);
     try {
-      await api.post("auth/forgot-password", { email });
-      setFormData((prev) => ({ ...prev, email }));
+      await api.post("auth/forgot-password", { email: account, account, username: account });
+      setFormData((prev) => ({ ...prev, email: account }));
       setStep("reset");
       showToast("Ma xac nhan da duoc gui den email cua ban.", "success");
     } catch (error) {
@@ -70,7 +70,9 @@ const ForgotPasswordPage = () => {
     setLoading(true);
     try {
       await api.post("auth/reset-password", {
-        email: formData.email.trim().toLowerCase(),
+        email: formData.email.trim(),
+        account: formData.email.trim(),
+        username: formData.email.trim(),
         code: formData.code,
         password: formData.password,
       });
@@ -95,18 +97,19 @@ const ForgotPasswordPage = () => {
         <div className="text-center">
           <h1 className="text-3xl font-extrabold text-gray-900">Quen mat khau</h1>
           <p className="text-gray-500 mt-2.5 text-sm">
-            {step === "email" ? "Nhap email de nhan ma xac nhan" : "Nhap ma xac nhan va mat khau moi"}
+            {step === "email" ? "Nhap email hoac ten dang nhap de nhan ma" : "Nhap ma xac nhan va mat khau moi"}
           </p>
         </div>
 
         {step === "email" ? (
           <form onSubmit={handleSendCode} className="space-y-5">
             <div>
-              <label className="block mb-1.5 text-sm font-medium text-gray-700">Email</label>
+              <label className="block mb-1.5 text-sm font-medium text-gray-700">Email hoac ten dang nhap</label>
               <input
-                type="email"
+                type="text"
                 name="email"
-                placeholder="you@example.com"
+                required
+                placeholder="hanhan hoac you@example.com"
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition sm:text-sm"
