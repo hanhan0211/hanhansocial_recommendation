@@ -2,7 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import sendEmail from "../utils/sendEmail.js";
+import { sendPasswordResetEmail } from "../services/emailService.js";
 
 export const register = async (req, res) => {
   try {
@@ -142,21 +142,10 @@ export const requestPasswordReset = async (req, res) => {
     await user.save();
 
     try {
-      await sendEmail({
-        email: user.email,
-        subject: "Ma OTP dat lai mat khau HanHan Social",
-        message: `Ma OTP dat lai mat khau cua ban la ${otp}. Ma co hieu luc trong 10 phut.`,
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">
-            <h2 style="margin: 0 0 12px;">Dat lai mat khau HanHan Social</h2>
-            <p>Xin chao ${user.fullname || user.username || "ban"},</p>
-            <p>Ma OTP dat lai mat khau cua ban la:</p>
-            <div style="display: inline-block; padding: 14px 20px; border-radius: 10px; background: #f3f4f6; font-size: 28px; font-weight: 700; letter-spacing: 6px;">
-              ${otp}
-            </div>
-            <p>Ma nay co hieu luc trong 10 phut. Neu ban khong yeu cau, hay bo qua email nay.</p>
-          </div>
-        `,
+      await sendPasswordResetEmail({
+        to: user.email,
+        code: otp,
+        username: user.fullname || user.username,
       });
     } catch (mailError) {
       user.resetPasswordOTP = "";
@@ -170,7 +159,7 @@ export const requestPasswordReset = async (req, res) => {
     console.error("requestPasswordReset error:", error);
     return res.status(500).json({
       message:
-        error.message === "Missing Gmail email configuration."
+        error.message.includes("Missing email") || error.message.includes("Missing Gmail")
           ? "Chua cau hinh EMAIL_USER/EMAIL_PASS trong file .env."
           : "Khong the gui ma OTP. Vui long thu lai sau.",
     });
