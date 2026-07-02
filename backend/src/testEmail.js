@@ -3,10 +3,11 @@ import { sendPasswordResetEmail } from './services/emailService.js';
 
 dotenv.config();
 
-const to = process.argv[2] || process.env.EMAIL_USER || process.env.GMAIL_USER;
+const to = process.argv[2] || process.env.BREVO_TEST_EMAIL || process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM;
 
 if (!to) {
-  console.error('Usage: npm run test:email -- your_email@gmail.com');
+  console.error('Usage: npm run test:email -- your_email@example.com');
+  console.error('Or set BREVO_TEST_EMAIL in backend/.env.');
   process.exit(1);
 }
 
@@ -20,9 +21,7 @@ try {
 } catch (error) {
   console.error('Email test FAIL:', {
     message: error?.message,
-    response: error?.response,
-    code: error?.code,
-    command: error?.command,
+    status: error?.status,
   });
   process.exitCode = 1;
 }

@@ -149,14 +149,6 @@ export const requestPasswordReset = async (req, res) => {
       });
     } catch (mailError) {
       console.error("Mail Error:", mailError.message);
-      // Fallback for Render Free Tier blocking SMTP ports (465, 587)
-      if (mailError.code === "ETIMEDOUT" || mailError.message.includes("timeout")) {
-        console.log(`[RENDER FREE BYPASS] MÃ OTP CỦA ${user.email} LÀ: ${otp}`);
-        return res.json({ 
-          message: `Mã OTP đã được gửi đến email của bạn.` 
-        });
-      }
-
       user.resetPasswordOTP = "";
       user.resetPasswordOTPExpire = null;
       await user.save();
@@ -168,8 +160,8 @@ export const requestPasswordReset = async (req, res) => {
     console.error("requestPasswordReset error:", error);
     return res.status(500).json({
       message:
-        error.message.includes("Missing email") || error.message.includes("Missing Gmail")
-          ? "Chua cau hinh EMAIL_USER/EMAIL_PASS trong file .env."
+        error.message.includes("Missing Brevo email configuration")
+          ? "Chua cau hinh BREVO_API_KEY/BREVO_SENDER_EMAIL trong file .env."
           : "Khong the gui ma OTP. Vui long thu lai sau.",
     });
   }

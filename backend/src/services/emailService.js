@@ -1,65 +1,108 @@
-import nodemailer from 'nodemailer';
+const BREVO_EMAIL_API_URL = "https://api.brevo.com/v3/smtp/email";
+const EMAIL_TIMEOUT_MS = 15000;
 
-const cleanEnv = (value) => value?.trim().replace(/^['"]|['"]$/g, '');
-const cleanSecret = (value) => cleanEnv(value)?.replace(/\s+/g, '');
+const cleanEnv = (value) => value?.trim().replace(/^['"]|['"]$/g, "");
+const cleanSecret = (value) => cleanEnv(value)?.replace(/\s+/g, "");
 
-const getMailConfig = () => {
-  const user = cleanEnv(process.env.EMAIL_USER || process.env.GMAIL_USER || process.env.SMTP_USER);
-  const pass = cleanSecret(process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
-  const host = cleanEnv(process.env.SMTP_HOST) || 'smtp.gmail.com';
-  const port = Number(cleanEnv(process.env.SMTP_PORT) || 587);
-  const from = cleanEnv(process.env.EMAIL_FROM) || user;
+const extractEmail = (value) => {
+  const cleaned = cleanEnv(value);
+  if (!cleaned) return "";
 
-  return { user, pass, host, port, from };
+  const match = cleaned.match(/<([^>]+)>/);
+  return (match?.[1] || cleaned).trim();
 };
 
-const createTransporter = ({ user, pass, host, port, secure }) => {
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    requireTLS: !secure,
-    auth: { user, pass },
-    connectionTimeout: 3000,
-    greetingTimeout: 3000,
-    socketTimeout: 5000,
-  });
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const getMailConfig = () => {
+  const apiKey = cleanSecret(process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY);
+  const senderEmail = extractEmail(
+    process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || process.env.EMAIL_USER
+  );
+  const senderName = cleanEnv(process.env.BREVO_SENDER_NAME || process.env.EMAIL_FROM_NAME) || "HanHan Social";
+
+  return { apiKey, senderEmail, senderName };
+};
+
+export const sendTransactionalEmail = async ({ to, toName, subject, text, html }) => {
+  const { apiKey, senderEmail, senderName } = getMailConfig();
+
+  if (!apiKey || !senderEmail) {
+    throw new Error("Missing Brevo email configuration. Set BREVO_API_KEY and BREVO_SENDER_EMAIL.");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EMAIL_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(BREVO_EMAIL_API_URL, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: {
+          name: senderName,
+          email: senderEmail,
+        },
+        to: [
+          {
+            email: to,
+            ...(toName ? { name: toName } : {}),
+          },
+        ],
+        subject,
+        textContent: text,
+        htmlContent: html,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const detail = body ? ` ${body}` : "";
+      throw new Error(`Brevo email API failed (${response.status}).${detail}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Brevo email API request timed out.");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 export const sendPasswordResetEmail = async ({ to, code, username }) => {
-  const { user, pass, host, port, from } = getMailConfig();
+  const safeUsername = escapeHtml(username || "ban");
+  const safeCode = escapeHtml(code);
 
-  if (!user || !pass) {
-    throw new Error('Missing email SMTP configuration.');
-  }
-
-  const mailOptions = {
-    from: `"HanHan Social" <${from}>`,
+  await sendTransactionalEmail({
     to,
-    subject: 'Ma xac nhan dat lai mat khau HanHan Social',
-    text: `Xin chao ${username || ''}, ma xac nhan dat lai mat khau cua ban la ${code}. Ma co hieu luc trong 10 phut.`,
+    toName: username,
+    subject: "Ma xac nhan dat lai mat khau HanHan Social",
+    text: `Xin chao ${username || "ban"}, ma xac nhan dat lai mat khau cua ban la ${code}. Ma co hieu luc trong 10 phut.`,
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
         <h2 style="margin:0 0 12px">Dat lai mat khau HanHan Social</h2>
-        <p>Xin chao ${username || 'ban'},</p>
+        <p>Xin chao ${safeUsername},</p>
         <p>Ma xac nhan dat lai mat khau cua ban la:</p>
         <div style="font-size:28px;font-weight:700;letter-spacing:6px;background:#f3f4f6;padding:14px 18px;border-radius:10px;display:inline-block">
-          ${code}
+          ${safeCode}
         </div>
         <p>Ma nay co hieu luc trong 10 phut. Neu ban khong yeu cau, hay bo qua email nay.</p>
       </div>
     `,
-  };
-
-  try {
-    const transporter = createTransporter({ user, pass, host, port, secure: port === 465 });
-    await transporter.sendMail(mailOptions);
-  } catch (error) {
-    if (host === 'smtp.gmail.com' && port !== 465) {
-      const fallbackTransporter = createTransporter({ user, pass, host, port: 465, secure: true });
-      await fallbackTransporter.sendMail(mailOptions);
-      return;
-    }
-    throw error;
-  }
+  });
 };
