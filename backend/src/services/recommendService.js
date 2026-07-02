@@ -20,6 +20,28 @@ const SCORE_WEIGHTS = {
   COMMENT: 3,   // User bình luận
   SAVE: 4,      // User lưu bài viết
   UNSAVE: -4,   // User bỏ lưu
+  SEARCH: 2,    // User chủ động tìm kiếm từ khóa
+};
+
+const DECAY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+const WEEKLY_DECAY_RETENTION = 0.9;
+
+const getDecayedScore = (item, fallbackDate = new Date()) => {
+  const score = Number(item?.score || 0);
+  const lastInteractedAt = item?.lastInteractedAt || fallbackDate;
+  const lastTime = new Date(lastInteractedAt).getTime();
+
+  if (!Number.isFinite(score) || !Number.isFinite(lastTime)) {
+    return score;
+  }
+
+  const elapsedMs = Date.now() - lastTime;
+  if (elapsedMs <= 0) {
+    return score;
+  }
+
+  const elapsedIntervals = elapsedMs / DECAY_INTERVAL_MS;
+  return score * Math.pow(WEEKLY_DECAY_RETENTION, elapsedIntervals);
 };
 
 /**
@@ -87,12 +109,19 @@ export const updateAuthorScore = async (userId, authorId, actionType) => {
       // ─── TRƯỜNG HỢP 1: CHƯA CÓ PREFERENCE → TẠO MỚI ───────────────────
       console.log('   → Chưa có UserPreference, tạo mới...');
       
+      if (scoreChange <= 0) {
+        console.log('   Skip creating a new preference with a negative score');
+        console.log('='.repeat(80) + '\n');
+        return;
+      }
+
       preference = new UserPreference({
         userId: userObjectId,
         interactedAuthors: [
           {
             authorId: authorObjectId,
             score: scoreChange,
+            lastInteractedAt: new Date(),
           },
         ],
       });
@@ -116,7 +145,12 @@ export const updateAuthorScore = async (userId, authorId, actionType) => {
     if (authorIndex >= 0) {
       // ─── TRƯỜNG HỢP 2: TÁC GIẢ ĐÃ CÓ → CẬP NHẬT ĐIỂM ──────────────────
       const oldScore = preference.interactedAuthors[authorIndex].score;
-      preference.interactedAuthors[authorIndex].score += scoreChange;
+      const decayedOldScore = getDecayedScore(
+        preference.interactedAuthors[authorIndex],
+        preference.updatedAt
+      );
+      preference.interactedAuthors[authorIndex].score = decayedOldScore + scoreChange;
+      preference.interactedAuthors[authorIndex].lastInteractedAt = new Date();
       const newScore = preference.interactedAuthors[authorIndex].score;
 
       console.log(`   ✅ Tác giả ĐÃ TỒN TẠI trong mảng`);
@@ -138,6 +172,7 @@ export const updateAuthorScore = async (userId, authorId, actionType) => {
         preference.interactedAuthors.push({
           authorId: authorObjectId,
           score: scoreChange,
+          lastInteractedAt: new Date(),
         });
         console.log(`   ✅ THÊM MỚI tác giả với ${scoreChange} điểm`);
       } else {
@@ -192,9 +227,13 @@ export const getTopRecommendedAuthors = async (userId, limit = 20) => {
 
     // Sắp xếp theo điểm giảm dần và lấy top N
     const topAuthors = preference.interactedAuthors
-      .filter(author => author.score > 0) // Chỉ lấy điểm dương
-      .sort((a, b) => b.score - a.score) // Sắp xếp giảm dần
-      .slice(0, limit) // Lấy top N
+      .map(author => ({
+        authorId: author.authorId,
+        decayedScore: getDecayedScore(author, preference.updatedAt),
+      }))
+      .filter(author => author.decayedScore > 0)
+      .sort((a, b) => b.decayedScore - a.decayedScore)
+      .slice(0, limit)
       .map(author => author.authorId); // Trả về mảng ObjectId
 
     return topAuthors;
@@ -229,7 +268,11 @@ export const updateHashtagScore = async (userId, hashtags, actionType) => {
     if (!preference) {
       preference = new UserPreference({
         userId: userObjectId,
-        interactedHashtags: hashtags.map(tag => ({ hashtag: tag, score: scoreChange })),
+        interactedHashtags: hashtags.map(tag => ({
+          hashtag: tag,
+          score: scoreChange,
+          lastInteractedAt: new Date(),
+        })),
       });
       await preference.save();
       return;
@@ -239,9 +282,18 @@ export const updateHashtagScore = async (userId, hashtags, actionType) => {
     hashtags.forEach(tag => {
       const tagIndex = preference.interactedHashtags.findIndex(item => item.hashtag === tag);
       if (tagIndex >= 0) {
-        preference.interactedHashtags[tagIndex].score += scoreChange;
+        const decayedOldScore = getDecayedScore(
+          preference.interactedHashtags[tagIndex],
+          preference.updatedAt
+        );
+        preference.interactedHashtags[tagIndex].score = decayedOldScore + scoreChange;
+        preference.interactedHashtags[tagIndex].lastInteractedAt = new Date();
       } else {
-        preference.interactedHashtags.push({ hashtag: tag, score: scoreChange });
+        preference.interactedHashtags.push({
+          hashtag: tag,
+          score: scoreChange,
+          lastInteractedAt: new Date(),
+        });
       }
     });
 
@@ -266,8 +318,12 @@ export const getTopRecommendedHashtags = async (userId, limit = 5) => {
     if (!preference || !preference.interactedHashtags.length) return [];
 
     return preference.interactedHashtags
-      .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score)
+      .map(item => ({
+        hashtag: item.hashtag,
+        decayedScore: getDecayedScore(item, preference.updatedAt),
+      }))
+      .filter(item => item.decayedScore > 0)
+      .sort((a, b) => b.decayedScore - a.decayedScore)
       .slice(0, limit)
       .map(item => item.hashtag);
   } catch (error) {

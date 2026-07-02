@@ -936,15 +936,24 @@ export const completeOnboarding = async (req, res) => {
     if (!preference) {
       preference = new UserPreference({
         userId: userObjectId,
-        interactedHashtags: hashtags.map(tag => ({ hashtag: tag, score: 10 })), // Điểm 10 cho sở thích ban đầu
+        interactedHashtags: hashtags.map(tag => ({
+          hashtag: tag,
+          score: 10,
+          lastInteractedAt: new Date(),
+        })), // Điểm 10 cho sở thích ban đầu
       });
     } else {
       hashtags.forEach(tag => {
         const tagIndex = preference.interactedHashtags.findIndex(item => item.hashtag === tag);
         if (tagIndex >= 0) {
           preference.interactedHashtags[tagIndex].score += 10;
+          preference.interactedHashtags[tagIndex].lastInteractedAt = new Date();
         } else {
-          preference.interactedHashtags.push({ hashtag: tag, score: 10 });
+          preference.interactedHashtags.push({
+            hashtag: tag,
+            score: 10,
+            lastInteractedAt: new Date(),
+          });
         }
       });
     }

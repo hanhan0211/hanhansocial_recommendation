@@ -1,0 +1,23 @@
+[33m12f7acf[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m chức năng mới 1
+[33mffe7951[m quên mk 11
+[33m966bc1d[m fix: remove mock OTP message
+[33me32226f[m fix: bypass Render SMTP block for testing
+[33m0fda4d4[m fix: use robust emailService for forgot password
+[33me2253a0[m quên mk 9
+[33mb310e77[m quên mk 8
+[33m76abc9e[m quên mk 7
+[33m3a34fe4[m quên mk 6
+[33m1b05f91[m quên mk 5
+[33m7b6e16b[m quên mk 4
+[33m389d3c8[m quên mk 3
+[33m9da9d39[m quên mk 2
+[33m0ae19cf[m quên mk
+[33m310e372[m quên mk 1
+[33m44586f2[m fix lỗi cập nhật profile 5
+[33me9801c9[m fix lỗi cập nhật profile 4
+[33m3bd6e84[m fix lỗi cập nhật profile 3
+[33md2e9149[m fix lỗi cập nhật profile 2
+[33m3c0a366[m fix lỗi cập nhật profile
+[33m2bcc914[m deloy2
+[33m0659742[m deloy1
+[33m0db199d[m fix

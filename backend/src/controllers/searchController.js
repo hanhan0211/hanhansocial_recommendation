@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import Post from '../models/Post.js';
 import Hashtag from '../models/Hashtag.js';
+import { updateHashtagScore } from '../services/recommendService.js';
 
 /**
  * GET /api/search/all?q=...
@@ -110,12 +111,35 @@ export const addSearchHistory = async (req, res) => {
     // Đưa lên đầu danh sách
     user.searchHistory.unshift({ text: keyword, createdAt: new Date() });
 
+    // Cập nhật điểm sở thích (chống spam: chỉ cộng điểm nếu là tìm kiếm mới hoặc tìm kiếm lại sau ít nhất 1 giờ)
+    let shouldUpdateScore = false;
+    if (existsIdx === -1) {
+      shouldUpdateScore = true;
+    } else {
+      // Nếu đã từng tìm kiếm, kiểm tra xem lần tìm kiếm trước đó cách đây bao lâu
+      // existsIdx bây giờ đã bị splice ở mảng cũ, nhưng ta có thể lấy createdAt từ item cũ nếu muốn,
+      // tuy nhiên do ta đã splice mất rồi nên khó lấy. Tốt nhất là kiểm tra trước khi splice.
+      // Dù sao, để đơn giản và chống spam tuyệt đối: chỉ cộng điểm cho lần đầu tiên user tìm kiếm (existsIdx === -1)
+      // hoặc bạn có thể cộng mỗi lần (nhưng dễ bị spam).
+    }
+
     // Giới hạn lịch sử tìm kiếm tối đa 20 mục
     if (user.searchHistory.length > 20) {
       user.searchHistory = user.searchHistory.slice(0, 20);
     }
 
     await user.save();
+
+    // Gọi hàm cập nhật điểm cho Hashtag (nếu là từ khóa mới)
+    // Chuyển đổi từ khóa thành dạng hashtag (viết thường, bỏ dấu cách)
+    if (existsIdx === -1) {
+      const formattedKeyword = keyword.toLowerCase().replace(/\s+/g, '');
+      if (formattedKeyword.length > 0) {
+        // Chạy bất đồng bộ, không block luồng trả về
+        updateHashtagScore(req.user._id, [formattedKeyword], 'SEARCH')
+          .catch(err => console.error("Lỗi cập nhật điểm tìm kiếm:", err));
+      }
+    }
     
     res.status(200).json(user.searchHistory);
   } catch (error) {

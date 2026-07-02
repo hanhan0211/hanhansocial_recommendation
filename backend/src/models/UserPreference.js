@@ -32,6 +32,10 @@ const userPreferenceSchema = new mongoose.Schema(
           type: Number,
           default: 0,
         },
+        lastInteractedAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
 
@@ -46,6 +50,10 @@ const userPreferenceSchema = new mongoose.Schema(
         score: {
           type: Number,
           default: 0,
+        },
+        lastInteractedAt: {
+          type: Date,
+          default: Date.now,
         },
       },
     ],
