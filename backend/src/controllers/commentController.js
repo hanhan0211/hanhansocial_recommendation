@@ -154,6 +154,12 @@ export const deleteComment = async (req, res) => {
       return res.status(403).json({ message: "Bạn không có quyền xóa bình luận này" });
     }
 
+    // 🎯 TRỪ ĐIỂM RECOMMENDATION KHI XÓA BÌNH LUẬN
+    // Lưu ý: Người comment bị trừ điểm đối với tác giả bài viết
+    if (post.userId && comment.userId.toString() !== post.userId.toString()) {
+      await updateAuthorScore(comment.userId, post.userId, 'UNCOMMENT');
+    }
+
     // Xóa bình luận
     await Comment.findByIdAndDelete(id);
 

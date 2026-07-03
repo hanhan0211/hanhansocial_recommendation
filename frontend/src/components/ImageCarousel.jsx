@@ -47,6 +47,7 @@ const ImageCarousel = ({ images, postId, handleLikePost }) => {
         <video
           src={currentMedia}
           controls
+          controlsList="nodownload"
           autoPlay
           loop
           muted

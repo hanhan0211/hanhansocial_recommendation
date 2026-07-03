@@ -110,3 +110,19 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* 🔒 BẢO VỆ BẢN QUYỀN HÌNH ẢNH / VIDEO */
+/* Ngăn chặn việc kéo thả (drag) ảnh ra ngoài desktop hoặc tab khác */
+img, video {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  
+  /* Ngăn chặn bôi đen (highlight) */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}

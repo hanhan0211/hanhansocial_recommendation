@@ -8,6 +8,16 @@ import mongoose from "mongoose";
  * MỤC ĐÍCH: Quản lý điểm tương tác giữa user và các tác giả
  * ═══════════════════════════════════════════════════════════════════════════
  */
+import UserPreference from "../models/UserPreference.js";
+import mongoose from "mongoose";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SERVICE: Preference Service
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MỤC ĐÍCH: Quản lý điểm tương tác giữa user và các tác giả
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -18,6 +28,7 @@ const SCORE_WEIGHTS = {
   LIKE: 1,      // User thích bài viết
   UNLIKE: -1,   // User bỏ thích
   COMMENT: 3,   // User bình luận
+  UNCOMMENT: -3,// User hoặc tác giả xóa bình luận
   SAVE: 4,      // User lưu bài viết
   UNSAVE: -4,   // User bỏ lưu
   SEARCH: 2,    // User chủ động tìm kiếm từ khóa

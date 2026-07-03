@@ -6,6 +6,108 @@ import { uploadAvatarToCloudinary } from '../middleware/uploadMiddleware.js';
 import mongoose from 'mongoose';
 
 // ==========================================
+// 6. GỢI Ý KẾT NỐI (BẠN CHUNG & NGẪU NHIÊN)
+// ==========================================
+// @route   GET /api/users/connect-suggestions
+// @access  Private
+export const getConnectSuggestions = async (req, res) => {
+  try {
+    const currentUserId = req.user._id;
+    const currentUser = await User.findById(currentUserId).select("following");
+
+    if (!currentUser) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    const myFollowing = currentUser.following || [];
+    const excludeIds = [currentUserId, ...myFollowing];
+
+    let suggestions = [];
+    const TOTAL_NEEDED = 5;
+    const MUTUAL_LIMIT = 3; // Lấy tối đa 3 người từ "bạn chung"
+
+    // BƯỚC 1: TÌM QUA BẠN CHUNG (Mutual Friends)
+    // Chỉ thực hiện nếu user đã có theo dõi ai đó
+    if (myFollowing.length > 0) {
+      const mutualSuggestions = await User.aggregate([
+        // Lấy những người mà mình ĐANG follow
+        { $match: { _id: { $in: myFollowing } } },
+        // Tách mảng following của họ ra
+        { $unwind: "$following" },
+        // Nhóm lại để đếm số lượng bạn chung
+        { 
+          $group: { 
+            _id: "$following", 
+            mutualCount: { $sum: 1 } 
+          } 
+        },
+        // Loại bỏ chính mình và những người mình ĐÃ follow
+        { 
+          $match: { 
+            _id: { $nin: excludeIds } 
+          } 
+        },
+        // Sắp xếp theo số lượng bạn chung giảm dần
+        { $sort: { mutualCount: -1 } },
+        { $limit: MUTUAL_LIMIT },
+        // Lookup để lấy thông tin user
+        {
+          $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "_id",
+            as: "userDetails"
+          }
+        },
+        { $unwind: "$userDetails" },
+        {
+          $project: {
+            _id: "$userDetails._id",
+            username: "$userDetails.username",
+            fullname: "$userDetails.fullname",
+            avatar: "$userDetails.avatar",
+            bio: "$userDetails.bio",
+            mutualCount: 1
+          }
+        }
+      ]);
+      
+      suggestions = [...mutualSuggestions];
+    }
+
+    // BƯỚC 2: TÌM NGẪU NHIÊN ĐỂ BÙ VÀO CHO ĐỦ 5 (Random Fallback)
+    const needed = TOTAL_NEEDED - suggestions.length;
+    
+    if (needed > 0) {
+      // Cập nhật lại excludeIds để không lấy trùng với mutualSuggestions vừa lấy
+      const currentSuggestionIds = suggestions.map(s => s._id);
+      const randomExcludeIds = [...excludeIds, ...currentSuggestionIds];
+
+      const randomSuggestions = await User.aggregate([
+        { $match: { _id: { $nin: randomExcludeIds } } },
+        { $sample: { size: needed } },
+        {
+          $project: {
+            _id: 1,
+            username: 1,
+            fullname: 1,
+            avatar: 1,
+            bio: 1,
+          },
+        },
+      ]);
+      
+      suggestions = [...suggestions, ...randomSuggestions];
+    }
+
+    res.json(suggestions);
+  } catch (error) {
+    console.error("❌ Lỗi getConnectSuggestions:", error);
+    res.status(500).json({ message: error.message || "Lỗi Server Backend" });
+  }
+};
+
+// ==========================================
 // LẤY THÔNG TIN USER THEO ID (cho chat với người lạ)
 // ==========================================
 // @route   GET /api/users/:id
