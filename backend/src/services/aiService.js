@@ -56,8 +56,12 @@ YÊU CẦU:
 
     const text = response.text.trim();
     
-    // Parse JSON từ response (loại bỏ markdown code block nếu có)
-    const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error("AI không trả về đúng định dạng JSON");
+    }
+    const jsonStr = text.substring(startIndex, endIndex + 1);
     const result = JSON.parse(jsonStr);
 
     return {
@@ -103,7 +107,13 @@ YÊU CẦU:
     });
 
     const text = response.text.trim();
-    const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error("AI không trả về đúng định dạng JSON");
+    }
+    const jsonStr = text.substring(startIndex, endIndex + 1);
     const result = JSON.parse(jsonStr);
 
     return {
@@ -144,7 +154,13 @@ YÊU CẦU:
     });
 
     const text = response.text.trim();
-    const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error("AI không trả về đúng định dạng JSON");
+    }
+    const jsonStr = text.substring(startIndex, endIndex + 1);
     const result = JSON.parse(jsonStr);
 
     return {
