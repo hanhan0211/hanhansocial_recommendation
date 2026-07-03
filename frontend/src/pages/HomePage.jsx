@@ -356,6 +356,7 @@ const HomePage = () => {
       saveSeenIdsToStorage(shownIdsRef.current); // Lưu ngay để reload không hiện lại
     }
     setPosts(prev => [newPost, ...prev]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleOpenShare = (post) => {
