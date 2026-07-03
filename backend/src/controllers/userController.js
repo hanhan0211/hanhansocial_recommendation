@@ -592,55 +592,6 @@ export const getShareSuggestions = async (req, res) => {
 };
 
 // ==========================================
-// 6. GỢI Ý KẾT NỐI NGẪU NHIÊN (REFRESH)
-// ==========================================
-// @route   GET /api/users/connect-suggestions
-// @access  Private
-export const getConnectSuggestions = async (req, res) => {
-  try {
-    const currentUserId = req.user._id;
-    const currentUser = await User.findById(currentUserId).select("following");
-
-    if (!currentUser) {
-      return res.status(404).json({ message: "Người dùng không tồn tại" });
-    }
-
-    const excludeIds = [
-      currentUserId,
-      ...(currentUser.following || []),
-    ];
-
-    const eligibleCount = await User.countDocuments({
-      _id: { $nin: excludeIds },
-    });
-
-    if (eligibleCount === 0) {
-      return res.json([]);
-    }
-
-    const sampleSize = Math.min(5, eligibleCount);
-
-    const suggestions = await User.aggregate([
-      { $match: { _id: { $nin: excludeIds } } },
-      { $sample: { size: sampleSize } },
-      {
-        $project: {
-          _id: 1,
-          username: 1,
-          fullname: 1,
-          avatar: 1,
-          bio: 1,
-        },
-      },
-    ]);
-
-    res.json(suggestions);
-  } catch (error) {
-    console.error("❌ Lỗi getConnectSuggestions:", error);
-    res.status(500).json({ message: error.message || "Lỗi Server Backend" });
-  }
-};
-
 // ==========================================
 // 7. LẤY DANH SÁCH GỢI Ý KẾT BẠN
 // ==========================================
