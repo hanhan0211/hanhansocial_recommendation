@@ -67,7 +67,7 @@ function App() {
                 onClick={handleDismissMindful}
                 className="w-full bg-slate-900 hover:bg-black text-white font-bold py-3.5 rounded-xl transition cursor-pointer"
               >
-                Tôi biết rồi, tiếp tục lướt
+                Tôi biết rồi
               </button>
             </div>
           </div>
