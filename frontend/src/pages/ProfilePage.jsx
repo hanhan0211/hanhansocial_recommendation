@@ -1337,31 +1337,7 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              {/* Bài viết phổ biến nhất */}
-              <div>
-                <h4 className="font-bold text-[15px] text-slate-900 mb-3 flex items-center gap-2">
-                  <FiStar className="text-yellow-500" />
-                  Bài viết phổ biến nhất
-                </h4>
-                {posts.length > 0 && (
-                  <div className="bg-slate-50 rounded-xl p-3 flex gap-3">
-                    <img
-                      src={posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))[0]?.images?.[0] || "https://via.placeholder.com/100"}
-                      className="w-16 h-16 rounded-lg object-cover"
-                      alt="top post"
-                    />
-                    <div className="flex-1">
-                      <p className="text-[13px] text-slate-700 line-clamp-2 mb-1">
-                        {posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))[0]?.content}
-                      </p>
-                      <div className="flex gap-3 text-[12px] text-slate-500">
-                        <span>❤️ {posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))[0]?.likes?.length || 0}</span>
-                        <span>💬 {posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))[0]?.commentCount || 0}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+
 
             </div>
           </div>
