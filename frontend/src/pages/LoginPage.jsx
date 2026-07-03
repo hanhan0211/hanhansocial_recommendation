@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { FcGoogle } from 'react-icons/fc';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { useGoogleLogin } from '@react-oauth/google';
 
 const LoginPage = () => {
@@ -14,6 +15,7 @@ const LoginPage = () => {
     password: "",
   });
   const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
@@ -147,14 +149,23 @@ const LoginPage = () => {
             <label className="block mb-1.5 text-sm font-medium text-gray-700">
               Mật khẩu
             </label>
-            <input
-              type="password"
-              name="password"
-              placeholder="••••••••"
-              value={formData.password}
-              onChange={handleChange}
-              className={`w-full px-4 py-2.5 rounded-lg border ${errors.password ? 'border-red-500 focus:ring-red-100 focus:border-red-500' : 'border-gray-300 focus:ring-blue-100 focus:border-blue-400'} bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition sm:text-sm`}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password"
+                placeholder="••••••••"
+                value={formData.password}
+                onChange={handleChange}
+                className={`w-full px-4 py-2.5 pr-12 rounded-lg border ${errors.password ? 'border-red-500 focus:ring-red-100 focus:border-red-500' : 'border-gray-300 focus:ring-blue-100 focus:border-blue-400'} bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition sm:text-sm`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+              >
+                {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+              </button>
+            </div>
             {errors.password && <p className="text-red-500 text-xs mt-1 font-medium">{errors.password}</p>}
           </div>
 
