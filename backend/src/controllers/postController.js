@@ -153,20 +153,23 @@ export const getFeedPosts = async (req, res) => {
     console.log(`   ✅ Recommended: ${recommendedHashtags.length} chủ đề hashtags`);
 
     // ─────────────────────────────────────────────────────────────────────
-    // BƯỚC 3: TÍNH TOÁN TỶ LỆ 60/40
+    // BƯỚC 3: TÍNH TOÁN TỶ LỆ 50/40/10 (ANTI-FILTER BUBBLE)
     // ─────────────────────────────────────────────────────────────────────
-    let followingLimit = Math.ceil(limit * 0.6); // 60%
-    let recommendedLimit = Math.floor(limit * 0.4); // 40%
+    let followingLimit = Math.ceil(limit * 0.5); // 50%
+    let recommendedLimit = Math.ceil(limit * 0.4); // 40%
+    let randomLimit = limit - followingLimit - recommendedLimit; // ~10%
 
     // Điều chỉnh nếu không có following
     if (followingIds.length === 0) {
       followingLimit = 0;
-      recommendedLimit = Math.ceil(limit * 0.5); // Giảm xuống 50%
+      recommendedLimit = Math.ceil(limit * 0.8); // 80% Recommend
+      randomLimit = limit - recommendedLimit; // 20% Random
     }
 
-    console.log(`\n📊 TỶ LỆ 60/40:`);
-    console.log(`   • Tầng 1 (Following):   ${followingLimit} bài (${Math.round(followingLimit/limit*100)}%)`);
-    console.log(`   • Tầng 2 (Recommended): ${recommendedLimit} bài (${Math.round(recommendedLimit/limit*100)}%)`);
+    console.log(`\n📊 TỶ LỆ PHÂN BỔ (ANTI-FILTER BUBBLE):`);
+    console.log(`   • Tầng 1 (Following):   ${followingLimit} bài`);
+    console.log(`   • Tầng 2 (Recommended): ${recommendedLimit} bài`);
+    console.log(`   • Tầng 3 (Random/Mới lạ): ${randomLimit} bài`);
 
     // ─────────────────────────────────────────────────────────────────────
     // PIPELINE POPULATE DÙN G CHUNG
@@ -273,13 +276,40 @@ export const getFeedPosts = async (req, res) => {
     console.log(`   ✅ Lấy được: ${recommendedPosts.length} bài từ recommended (max 2/tác giả)`);
 
     // ─────────────────────────────────────────────────────────────────────
-    // BƯỚC 6: FALLBACK - FILL THÊM BÀI TỪ HASHTAG HOẶC NGẪU NHIÊN NẾU CHƯA ĐỦ
+    // BƯỚC 6: TẦNG 3 - BÀI VIẾT RANDOM/KHÁM PHÁ MỚI LẠ (10%)
     // ─────────────────────────────────────────────────────────────────────
-    let allPosts = [...followingPosts, ...recommendedPosts];
+    console.log(`\n🎯 BƯỚC 6: Lấy bài viết Tầng 3 (Random/Khám phá mới lạ)...`);
+    
+    let randomPosts = [];
+    if (randomLimit > 0) {
+      const alreadyHasIds = [...seenIds, ...followingPosts.map(p => p._id), ...recommendedPosts.map(p => p._id)];
+      const usedAuthorIds = [userId, ...followingIds, ...recommendedAuthorIds.slice(0, 15)];
+
+      randomPosts = await Post.aggregate([
+        {
+          $match: {
+            isHidden: { $ne: true },
+            _id: { $nin: alreadyHasIds },
+            userId: { 
+              $nin: usedAuthorIds, // Loại trừ hoàn toàn vòng tròn quen biết
+              $ne: userId,
+            },
+          },
+        },
+        { $sample: { size: randomLimit } },
+        ...populatePipeline,
+      ]);
+      console.log(`   ✅ Lấy được: ${randomPosts.length} bài ngẫu nhiên để phá vỡ Bong Bóng Lọc`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // BƯỚC 6.5: FALLBACK - NẾU TỔNG VẪN CHƯA ĐỦ
+    // ─────────────────────────────────────────────────────────────────────
+    let allPosts = [...followingPosts, ...recommendedPosts, ...randomPosts];
     
     if (allPosts.length < limit) {
       let needed = limit - allPosts.length;
-      console.log(`\n🔄 BƯỚC 6: Fallback - Cần thêm ${needed} bài...`);
+      console.log(`\n🔄 BƯỚC 6.5: Fallback - Cần thêm ${needed} bài...`);
 
       let alreadyHasIds = [...seenIds, ...allPosts.map(p => p._id)];
       const usedAuthorIds = [
@@ -697,9 +727,10 @@ export const getExplorePosts = async (req, res) => {
       },
     ];
 
-    // Tính toán phân bổ (50/50)
-    let recommendedLimit = Math.ceil(limit * 0.5);
-    let trendingLimit = Math.floor(limit * 0.5);
+    // Tính toán phân bổ (40/40/20) - ANTI-FILTER BUBBLE
+    let recommendedLimit = Math.ceil(limit * 0.4); // 40% Cá nhân hóa
+    let trendingLimit = Math.ceil(limit * 0.4); // 40% Thịnh hành
+    let randomLimit = limit - recommendedLimit - trendingLimit; // 20% Ngẫu nhiên
 
     // ─────────────────────────────────────────────────────────────────────
     // BƯỚC 3: TẦNG 1 - CÁ NHÂN HÓA TỪ NGƯỜI LẠ (50%)
@@ -789,14 +820,37 @@ export const getExplorePosts = async (req, res) => {
     console.log(`   ✅ Lấy được: ${trendingPosts.length} bài thịnh hành`);
 
     // ─────────────────────────────────────────────────────────────────────
-    // BƯỚC 5: TẦNG 3 - FALLBACK TỪ HASHTAG HOẶC NGẪU NHIÊN NẾU THIẾU
+    // BƯỚC 5: TẦNG 3 - NGẪU NHIÊN (SERENDIPITY) (20%)
     // ─────────────────────────────────────────────────────────────────────
-    let allPosts = [...recommendedPosts, ...trendingPosts];
+    console.log(`\n🎲 BƯỚC 5: Lấy bài ngẫu nhiên hoàn toàn (Mục tiêu: ${randomLimit} bài)...`);
+    
+    let randomPosts = [];
+    let alreadyFetchedIds = [...seenIds, ...recommendedPosts.map(p => p._id), ...trendingPosts.map(p => p._id)];
+    
+    if (randomLimit > 0) {
+      randomPosts = await Post.aggregate([
+        {
+          $match: {
+            isHidden: { $ne: true },
+            userId: { $nin: excludeUserIds },
+            _id: { $nin: alreadyFetchedIds }
+          }
+        },
+        { $sample: { size: randomLimit } },
+        ...populatePipeline
+      ]);
+    }
+    console.log(`   ✅ Lấy được: ${randomPosts.length} bài ngẫu nhiên`);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // BƯỚC 5.5: FALLBACK (NẾU THIẾU)
+    // ─────────────────────────────────────────────────────────────────────
+    let allPosts = [...recommendedPosts, ...trendingPosts, ...randomPosts];
     let fallbackPosts = [];
 
     if (allPosts.length < limit) {
         let needed = limit - allPosts.length;
-        console.log(`\n🎲 BƯỚC 5: Fallback ngẫu nhiên (Cần thêm: ${needed} bài)...`);
+        console.log(`\n🎲 BƯỚC 5.5: Fallback ngẫu nhiên (Cần thêm: ${needed} bài)...`);
         
         let alreadyFetchedIds = allPosts.map(p => p._id);
         
