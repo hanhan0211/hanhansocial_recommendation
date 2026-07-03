@@ -57,7 +57,7 @@ const PostDropdown = ({
 
       alert(isFollowing ? "Đã bỏ theo dõi người dùng!" : "Đã theo dõi người dùng!");
       
-      if (fetchFeed) fetchFeed(true);
+      // KHÔNG gọi fetchFeed(true) ở đây nữa để tránh làm mất bài viết hiện tại khỏi màn hình
       setActiveMenuId(null);
     } catch (error) {
       alert("Lỗi khi cập nhật trạng thái theo dõi: " + (error.response?.data?.message || error.message));

@@ -494,6 +494,11 @@ export const likePost = async (req, res) => {
       if (post.userId) {
         await updateAuthorScore(userId, post.userId, 'UNLIKE');
       }
+
+      // 🎯 CẬP NHẬT ĐIỂM HASHTAG
+      if (post.hashtags && post.hashtags.length > 0) {
+        await updateHashtagScore(userId, post.hashtags, 'UNLIKE');
+      }
     } else {
       // CHƯA LIKE -> Nhét tim vào
       post.likes.push(userId);

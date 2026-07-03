@@ -813,6 +813,11 @@ export const toggleSavePost = async (req, res) => {
       if (post.userId) {
         await updateAuthorScore(userId, post.userId, 'UNSAVE');
       }
+      
+      // 🎯 CẬP NHẬT ĐIỂM HASHTAG
+      if (post.hashtags && post.hashtags.length > 0) {
+        await updateHashtagScore(userId, post.hashtags, 'UNSAVE');
+      }
       console.log("🎯 AFTER calling updateAuthorScore UNSAVE");
     } else {
       user.savedPosts.push(postId);
