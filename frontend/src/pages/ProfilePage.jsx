@@ -817,9 +817,9 @@ const ProfilePage = () => {
       </Link>
 
       {/* HEADER PROFILE - NÂNG CẤP */}
-      <header className="flex flex-col md:flex-row items-center md:items-start gap-12 mb-8 pb-8 border-b border-slate-100">
+      <header className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-12 mb-8 pb-8 border-b border-slate-100">
         <div className="relative">
-          <div className="w-[150px] h-[150px] rounded-full flex-shrink-0">
+          <div className="w-[100px] h-[100px] md:w-[150px] md:h-[150px] rounded-full flex-shrink-0">
             <img
               src={getSafeAvatar(user.avatar, user.username)}
               className="w-full h-full rounded-full object-cover shadow-sm border border-slate-100"
@@ -941,15 +941,15 @@ const ProfilePage = () => {
 
       {/* TABS ĐIỀU HƯỚNG VÀ BỘ LỌC */}
       <div className="mb-6">
-        <div className="flex justify-between items-center border-t border-slate-200">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center border-t border-slate-200 gap-2 sm:gap-0">
           {/* Tabs */}
-          <div className="flex">
+          <div className="flex overflow-x-auto hide-scroll w-full sm:w-auto border-b sm:border-b-0 border-slate-100">
             <button
               onClick={() => setActiveTab('posts')}
-              className={`flex items-center gap-2 px-6 py-3 text-[13px] font-bold tracking-wide transition ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 text-[12px] sm:text-[13px] font-bold tracking-wide transition whitespace-nowrap ${
                 activeTab === 'posts'
-                  ? 'text-slate-900 border-t-2 border-slate-900 -mt-[1px]'
-                  : 'text-slate-400 hover:text-slate-600'
+                  ? 'text-slate-900 border-b-2 sm:border-t-2 sm:border-b-0 border-slate-900 sm:-mt-[1px]'
+                  : 'text-slate-400 hover:text-slate-600 border-b-2 border-transparent sm:border-0'
               }`}
             >
               <FiGrid size={16} />
@@ -958,10 +958,10 @@ const ProfilePage = () => {
             {isOwnProfile && (
               <button
                 onClick={() => setActiveTab('saved')}
-                className={`flex items-center gap-2 px-6 py-3 text-[13px] font-bold tracking-wide transition ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 text-[12px] sm:text-[13px] font-bold tracking-wide transition whitespace-nowrap ${
                   activeTab === 'saved'
-                    ? 'text-slate-900 border-t-2 border-slate-900 -mt-[1px]'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'text-slate-900 border-b-2 sm:border-t-2 sm:border-b-0 border-slate-900 sm:-mt-[1px]'
+                    : 'text-slate-400 hover:text-slate-600 border-b-2 border-transparent sm:border-0'
                 }`}
               >
                 <FiBookmark size={16} />
@@ -970,10 +970,10 @@ const ProfilePage = () => {
             )}
             <button
               onClick={() => setActiveTab('status')}
-              className={`flex items-center gap-2 px-6 py-3 text-[13px] font-bold tracking-wide transition ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 text-[12px] sm:text-[13px] font-bold tracking-wide transition whitespace-nowrap ${
                 activeTab === 'status'
-                  ? 'text-slate-900 border-t-2 border-slate-900 -mt-[1px]'
-                  : 'text-slate-400 hover:text-slate-600'
+                  ? 'text-slate-900 border-b-2 sm:border-t-2 sm:border-b-0 border-slate-900 sm:-mt-[1px]'
+                  : 'text-slate-400 hover:text-slate-600 border-b-2 border-transparent sm:border-0'
               }`}
             >
               <FiAlignLeft size={16} />
@@ -983,7 +983,7 @@ const ProfilePage = () => {
 
           {/* View Mode & Filter */}
           {(activeTab === 'posts' || activeTab === 'status') && (
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center justify-end px-2 sm:px-0">
               {/* Filter Dropdown */}
               <div className="relative group">
                 <button className="flex items-center gap-2 px-3 py-2 text-[13px] font-bold text-slate-600 hover:text-slate-900 transition">

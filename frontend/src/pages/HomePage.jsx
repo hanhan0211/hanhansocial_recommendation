@@ -111,7 +111,7 @@ const ImageCarousel = ({ images, postId, handleLikePost, posts, currentUser, isP
 
   return (
     <div 
-      className={`relative bg-slate-950 rounded-[24px] overflow-hidden flex items-center justify-center select-none ${containerHeight}`}
+      className={`relative bg-slate-950 rounded-[16px] sm:rounded-[24px] overflow-hidden flex items-center justify-center select-none ${containerHeight}`}
       onClick={isVideo ? handleSingleClick : undefined}
       onDoubleClick={handleDoubleClick}
     >
@@ -661,8 +661,19 @@ const HomePage = () => {
         `}
       </style>
 
-      {/* SIDEBAR */}
-      <nav className="fixed top-4 bottom-4 left-4 w-[260px] bg-white rounded-[32px] shadow-sm flex flex-col py-8 px-4 z-40 border border-slate-100">
+      {/* MOBILE HEADER (Chỉ hiện trên mobile) */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 backdrop-blur-md z-40 border-b border-slate-100 flex items-center justify-between px-4 shadow-sm">
+        <div className="flex items-center text-pink-600">
+          <FaConnectdevelop className="text-[24px] flex-shrink-0" />
+          <span className="ml-2 font-black text-[18px] tracking-tight whitespace-nowrap">HanHan Social</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <NotificationBadge />
+        </div>
+      </div>
+
+      {/* SIDEBAR (Ẩn trên mobile) */}
+      <nav className="hidden md:flex fixed top-4 bottom-4 left-4 w-[260px] bg-white rounded-[32px] shadow-sm flex-col py-8 px-4 z-40 border border-slate-100">
         <div className="flex items-center px-4 mb-10 cursor-pointer text-pink-600">
           <FaConnectdevelop className="text-[32px] flex-shrink-0" />
           <span className="ml-3 font-black text-[22px] tracking-tight whitespace-nowrap">HanHan Social</span>
@@ -715,9 +726,29 @@ const HomePage = () => {
     </div>
   </nav>
 
+  {/* MOBILE BOTTOM NAV */}
+  <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-[60px] z-40 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+    <Link to="/" className="text-pink-600 p-2 flex flex-col items-center">
+      <FiHome size={22} />
+    </Link>
+    <div onClick={() => setIsSearchOpen(true)} className="text-slate-500 p-2 flex flex-col items-center cursor-pointer">
+      <FiSearch size={22} />
+    </div>
+    <div onClick={() => setIsCreateModalOpen(true)} className="text-slate-500 p-2 flex flex-col items-center cursor-pointer">
+      <FiPlusSquare size={22} />
+    </div>
+    <Link to="/messages" className="text-slate-500 p-2 flex flex-col items-center relative">
+      <FiSend size={22} />
+      {unreadCount > 0 && <span className="absolute top-1 right-1 bg-rose-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold border border-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+    </Link>
+    <Link to={`/profile/${currentUser?.username}`} className="p-2 flex flex-col items-center">
+      <img src={myAvatar} className="w-7 h-7 rounded-full object-cover border border-slate-200" alt="My Profile" />
+    </Link>
+  </nav>
+
   {/* MAIN FEED */}
-  <main className="ml-[280px] flex justify-center pb-20">
-    <div className="flex w-full max-w-[1150px] pt-4 px-4 justify-center gap-10">
+  <main className="md:ml-[280px] flex justify-center pb-[80px] md:pb-20 pt-[60px] md:pt-0">
+    <div className="flex w-full max-w-[1150px] pt-4 px-2 sm:px-4 justify-center gap-10">
       <div className="w-full max-w-[650px]">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20"><div className="w-12 h-12 border-4 border-pink-200 border-t-pink-600 rounded-full animate-spin mb-4"></div><p className="text-slate-500 font-medium">Đang tải bảng tin...</p></div>
@@ -725,8 +756,8 @@ const HomePage = () => {
           <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-center border border-red-100">{error}</div>
         ) : (
           posts.map((post) => (
-            <div key={post._id} className="bg-white rounded-[32px] p-5 shadow-sm mb-8 border border-slate-100 relative">
-              <div className="flex justify-between items-center mb-4 px-2 relative">
+            <div key={post._id} className="bg-white rounded-[20px] sm:rounded-[32px] p-4 sm:p-5 shadow-sm mb-6 sm:mb-8 border border-slate-100 relative">
+              <div className="flex justify-between items-center mb-4 px-1 sm:px-2 relative">
                 {/* HEADER BÀI VIẾT - GẮN LINK PROFILE NGƯỜI ĐĂNG */}
                 <div className="flex items-center gap-3">
                   <Link to={`/profile/${post.userId?.username}`}>
@@ -769,13 +800,13 @@ const HomePage = () => {
               </div>
 
               <div className="flex justify-between items-center bg-slate-50 p-2 rounded-2xl relative z-0">
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2">
                   {(() => {
                     const isLiked = post.likes?.includes(currentUser?._id);
-                    return <button onClick={() => handleLikePost(post._id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition font-semibold text-[14px] cursor-pointer ${isLiked ? 'bg-pink-50 text-pink-600' : 'hover:bg-pink-50 text-slate-700 hover:text-pink-600'}`}><FiHeart className={`text-[20px] ${isLiked ? 'fill-pink-500 text-pink-500' : ''}`} /><span className="hidden sm:inline">{post.likes?.length || 0} Thích</span></button>;
+                    return <button onClick={() => handleLikePost(post._id)} className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl transition font-semibold text-[14px] cursor-pointer ${isLiked ? 'bg-pink-50 text-pink-600' : 'hover:bg-pink-50 text-slate-700 hover:text-pink-600'}`}><FiHeart className={`text-[20px] ${isLiked ? 'fill-pink-500 text-pink-500' : ''}`} /><span className="inline-block min-w-[12px]">{post.likes?.length || 0}</span><span className="hidden sm:inline">Thích</span></button>;
                   })()}
-                  <button onClick={() => toggleCommentSection(post._id)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-pink-50 text-slate-700 hover:text-pink-600 transition font-semibold text-[14px] cursor-pointer"><FiMessageCircle size={20} /> <span className="hidden sm:inline">Bình luận</span></button>
-                  <button onClick={() => handleOpenShare(post)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-slate-200 text-slate-700 transition font-semibold text-[14px] cursor-pointer"><FiSend size={20} /> <span className="hidden sm:inline">Chia sẻ</span></button>
+                  <button onClick={() => toggleCommentSection(post._id)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl hover:bg-pink-50 text-slate-700 hover:text-pink-600 transition font-semibold text-[14px] cursor-pointer"><FiMessageCircle size={20} /> <span className="hidden sm:inline">Bình luận</span></button>
+                  <button onClick={() => handleOpenShare(post)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl hover:bg-slate-200 text-slate-700 transition font-semibold text-[14px] cursor-pointer"><FiSend size={20} /> <span className="hidden sm:inline">Chia sẻ</span></button>
                 </div>
                 <BookmarkButton
                   isSaved={isPostSaved(post._id)}
