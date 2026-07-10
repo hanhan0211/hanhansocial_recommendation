@@ -102,7 +102,7 @@ const OnboardingPage = () => {
       <div className="max-w-3xl w-full space-y-8 bg-white p-6 md:p-10 md:rounded-3xl md:shadow-xl border border-gray-100">
         <div className="text-center">
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">
-            Chào mừng bạn đến với HanHan!
+            Chào mừng bạn đến với TVU!
           </h2>
           <p className="mt-4 text-lg text-gray-500 max-w-2xl mx-auto">
             Hãy chọn đúng <span className="font-semibold text-blue-600">3 chủ đề</span> mà bạn quan tâm để chúng tôi có thể đề xuất những nội dung phù hợp nhất dành riêng cho bạn.

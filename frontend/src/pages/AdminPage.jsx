@@ -87,7 +87,7 @@ const AdminPage = () => {
           <div className="w-px h-6 bg-slate-200" />
           <div className="flex items-center gap-2 text-violet-600">
             <FaConnectdevelop size={24} />
-            <span className="font-black text-[18px]">HanHan Admin</span>
+            <span className="font-black text-[18px]">TVU Admin</span>
           </div>
         </div>
         <div className="flex items-center gap-3">

@@ -71,7 +71,7 @@ const AdminLayout = () => {
         <div className="px-6 py-6 border-b border-white/10">
           <div className="flex items-center gap-2 text-violet-400">
             <FaConnectdevelop size={26} />
-            <span className="font-black text-[17px] tracking-tight">HanHan Admin</span>
+            <span className="font-black text-[17px] tracking-tight">TVU Admin</span>
           </div>
         </div>
 

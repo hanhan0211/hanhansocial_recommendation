@@ -119,7 +119,7 @@ const ForgotPasswordPage = () => {
                 type="text"
                 name="email"
                 required
-                placeholder="hanhan hoac you@example.com"
+                placeholder="tvu hoac you@example.com"
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition sm:text-sm"

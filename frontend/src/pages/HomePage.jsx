@@ -665,7 +665,7 @@ const HomePage = () => {
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/80 backdrop-blur-md z-40 border-b border-slate-100 flex items-center justify-between px-4 shadow-sm">
         <div className="flex items-center text-pink-600">
           <FaConnectdevelop className="text-[24px] flex-shrink-0" />
-          <span className="ml-2 font-black text-[18px] tracking-tight whitespace-nowrap">HanHan Social</span>
+          <span className="ml-2 font-black text-[18px] tracking-tight whitespace-nowrap">TVU Social</span>
         </div>
         <div className="flex items-center gap-3">
           <NotificationBadge />
@@ -676,7 +676,7 @@ const HomePage = () => {
       <nav className="hidden md:flex fixed top-4 bottom-4 left-4 w-[260px] bg-white rounded-[32px] shadow-sm flex-col py-8 px-4 z-40 border border-slate-100">
         <div className="flex items-center px-4 mb-10 cursor-pointer text-pink-600">
           <FaConnectdevelop className="text-[32px] flex-shrink-0" />
-          <span className="ml-3 font-black text-[22px] tracking-tight whitespace-nowrap">HanHan Social</span>
+          <span className="ml-3 font-black text-[22px] tracking-tight whitespace-nowrap">TVU Social</span>
         </div>
         <div className="flex-1 flex flex-col gap-2">
           <NavItem icon={<FiHome className="text-[22px]" />} text="Trang chủ" isActive />

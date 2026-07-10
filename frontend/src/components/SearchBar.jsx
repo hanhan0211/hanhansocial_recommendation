@@ -153,7 +153,7 @@ const SearchBar = ({ isOpen, onClose }) => {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Tìm kiếm trên HanHan Social..."
+              placeholder="Tìm kiếm trên TVU Social..."
               className="w-full bg-slate-100 border-none rounded-xl py-3 px-4 pr-10 text-[14px] focus:ring-0 outline-none"
               value={searchTerm}
               autoFocus={isOpen}

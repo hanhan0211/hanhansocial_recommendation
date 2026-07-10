@@ -75,7 +75,7 @@ const AdminDashboard = () => {
         <div>
           <h1 className="text-[28px] font-black text-slate-900 tracking-tight">Dashboard Quản trị</h1>
           <p className="text-slate-500 text-[14px] mt-1">
-            Báo cáo thống kê hoạt động mạng xã hội HanHan và phân tích SaaS
+            Báo cáo thống kê hoạt động mạng xã hội TVU và phân tích SaaS
           </p>
         </div>
         <button
@@ -233,7 +233,7 @@ const AdminDashboard = () => {
               Khu vực quản trị tối cao (SaaS Administration)
             </div>
             <p className="text-slate-500 text-[13px] leading-relaxed">
-              Vui lòng rà soát kỹ lưỡng các thông tin bài viết và tài khoản để giữ an ninh hệ thống mạng xã hội HanHan. Hãy phân quyền và hành động một cách bảo mật nhất.
+              Vui lòng rà soát kỹ lưỡng các thông tin bài viết và tài khoản để giữ an ninh hệ thống mạng xã hội TVU. Hãy phân quyền và hành động một cách bảo mật nhất.
             </p>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-50 flex gap-4">

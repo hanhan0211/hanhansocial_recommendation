@@ -25,7 +25,7 @@ const getMailConfig = () => {
   const senderEmail = extractEmail(
     process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || process.env.EMAIL_USER
   );
-  const senderName = cleanEnv(process.env.BREVO_SENDER_NAME || process.env.EMAIL_FROM_NAME) || "HanHan Social";
+  const senderName = cleanEnv(process.env.BREVO_SENDER_NAME || process.env.EMAIL_FROM_NAME) || "TVU Social";
 
   return { apiKey, senderEmail, senderName };
 };
@@ -91,11 +91,11 @@ export const sendPasswordResetEmail = async ({ to, code, username }) => {
   await sendTransactionalEmail({
     to,
     toName: username,
-    subject: "Ma xac nhan dat lai mat khau HanHan Social",
+    subject: "Ma xac nhan dat lai mat khau TVU Social",
     text: `Xin chao ${username || "ban"}, ma xac nhan dat lai mat khau cua ban la ${code}. Ma co hieu luc trong 10 phut.`,
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
-        <h2 style="margin:0 0 12px">Dat lai mat khau HanHan Social</h2>
+        <h2 style="margin:0 0 12px">Dat lai mat khau TVU Social</h2>
         <p>Xin chao ${safeUsername},</p>
         <p>Ma xac nhan dat lai mat khau cua ban la:</p>
         <div style="font-size:28px;font-weight:700;letter-spacing:6px;background:#f3f4f6;padding:14px 18px;border-radius:10px;display:inline-block">

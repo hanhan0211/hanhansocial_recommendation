@@ -1383,7 +1383,7 @@ const ProfilePage = () => {
                   type="text" 
                   value={editUsername} 
                   onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/\s/g, ''))} 
-                  placeholder="Ví dụ: hanhan_cute"
+                  placeholder="Ví dụ: tvu_cute"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-pink-500 text-[14px]"
                   required
                 />
